@@ -1,140 +1,143 @@
+//! `jesse_rust` — native implementations of Jesse's indicators and a few
+//! supporting utilities, exposed to Python through PyO3.
+//!
+//! Modules are grouped by indicator category; see each submodule's docstring
+//! for what lives where. Private numerical helpers live in `helpers.rs`; the
+//! shared PyO3 return-type aliases live in `types.rs`.
+
 use pyo3::prelude::*;
 
-mod indicators;
+mod helpers;
+mod types;
 
-use indicators::*;
+mod bands;
+mod candle;
+mod ehlers;
+mod moving_averages;
+mod oscillators;
+mod statistical;
+mod trend;
+mod util;
+mod volume;
 
-/// A Python module implemented in Rust.
 #[pymodule]
 fn jesse_rust(_py: Python, m: &PyModule) -> PyResult<()> {
-    // Indicators
-    m.add_function(wrap_pyfunction!(rsi, m)?)?;
-    m.add_function(wrap_pyfunction!(kama, m)?)?;
-    m.add_function(wrap_pyfunction!(ichimoku_cloud, m)?)?;
-    m.add_function(wrap_pyfunction!(srsi, m)?)?;
-    m.add_function(wrap_pyfunction!(adx, m)?)?;
-    m.add_function(wrap_pyfunction!(tema, m)?)?;
-    m.add_function(wrap_pyfunction!(macd, m)?)?;
-    m.add_function(wrap_pyfunction!(bollinger_bands_width, m)?)?;
-    m.add_function(wrap_pyfunction!(bollinger_bands, m)?)?;
-    m.add_function(wrap_pyfunction!(adosc, m)?)?;
-    m.add_function(wrap_pyfunction!(ema, m)?)?;
-    m.add_function(wrap_pyfunction!(cvi, m)?)?;
-    m.add_function(wrap_pyfunction!(dti, m)?)?;
-    m.add_function(wrap_pyfunction!(dx, m)?)?; // New indicator
-    m.add_function(wrap_pyfunction!(fosc, m)?)?; // New indicator
-    m.add_function(wrap_pyfunction!(frama, m)?)?; // New indicator
-    
-    // Utility functions (now in indicators.rs)
-    m.add_function(wrap_pyfunction!(shift, m)?)?;
-    m.add_function(wrap_pyfunction!(moving_std, m)?)?;
-    m.add_function(wrap_pyfunction!(sma, m)?)?;
-    m.add_function(wrap_pyfunction!(smma, m)?)?;
-    m.add_function(wrap_pyfunction!(alligator, m)?)?;
-    m.add_function(wrap_pyfunction!(di, m)?)?;
-    m.add_function(wrap_pyfunction!(chop, m)?)?;
-    m.add_function(wrap_pyfunction!(atr, m)?)?;
-    m.add_function(wrap_pyfunction!(indicators::chande, m)?)?;
-    m.add_function(wrap_pyfunction!(indicators::donchian, m)?)?;
-    
-    // New optimized indicators
-    m.add_function(wrap_pyfunction!(willr, m)?)?;
-    m.add_function(wrap_pyfunction!(wma, m)?)?;
-    m.add_function(wrap_pyfunction!(vwma, m)?)?;
-    
-    // Performance optimized indicators
-    m.add_function(wrap_pyfunction!(stoch, m)?)?;
-    m.add_function(wrap_pyfunction!(stochf, m)?)?;
-    m.add_function(wrap_pyfunction!(dm, m)?)?;
-    m.add_function(wrap_pyfunction!(dema, m)?)?;
-    
-    // Newly added indicators
-    m.add_function(wrap_pyfunction!(zlema, m)?)?;
-    m.add_function(wrap_pyfunction!(wt, m)?)?;
-    
-    // Latest indicators
-    m.add_function(wrap_pyfunction!(vwap, m)?)?;
-    m.add_function(wrap_pyfunction!(vi, m)?)?;
-    m.add_function(wrap_pyfunction!(t3, m)?)?;
-    
-    // Utility functions
-    m.add_function(wrap_pyfunction!(sum_floats, m)?)?;
-    m.add_function(wrap_pyfunction!(subtract_floats, m)?)?;
+    // ---- moving averages ----------------------------------------------------
+    m.add_function(wrap_pyfunction!(moving_averages::cwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::dema, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::ema, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::epma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::frama, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::hma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::hwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::jma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::kama, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::maaq, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::mcginley_dynamic, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::mwdx, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::nma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::rma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::sma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::smma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::sqwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::srwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::t3, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::tema, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::trix, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::vidya, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::vlma_inner, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::vpwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::vwap, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::vwma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::wilders, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::wma, m)?)?;
+    m.add_function(wrap_pyfunction!(moving_averages::zlema, m)?)?;
 
-    // Phase 3 — Power-weighted MAs
-    m.add_function(wrap_pyfunction!(cwma, m)?)?;
-    m.add_function(wrap_pyfunction!(sqwma, m)?)?;
-    m.add_function(wrap_pyfunction!(srwma, m)?)?;
-    m.add_function(wrap_pyfunction!(vpwma, m)?)?;
-    m.add_function(wrap_pyfunction!(epma, m)?)?;
-    m.add_function(wrap_pyfunction!(qstick, m)?)?;
+    // ---- oscillators --------------------------------------------------------
+    m.add_function(wrap_pyfunction!(oscillators::aroonosc, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::cci, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::cfo, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::cg, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::cmo, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::dpo, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::dti, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::fisher, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::fosc, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::lrsi, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::macd, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::mass, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::pfe, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::rsi, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::rsx, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::srsi, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::stoch, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::stochf, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::willr, m)?)?;
+    m.add_function(wrap_pyfunction!(oscillators::wt, m)?)?;
 
-    // Phase 3 — EMA variants
-    m.add_function(wrap_pyfunction!(rma, m)?)?;
-    m.add_function(wrap_pyfunction!(wilders, m)?)?;
-    m.add_function(wrap_pyfunction!(mcginley_dynamic, m)?)?;
-    m.add_function(wrap_pyfunction!(mwdx, m)?)?;
-    m.add_function(wrap_pyfunction!(hwma, m)?)?;
-    m.add_function(wrap_pyfunction!(trix, m)?)?;
-    m.add_function(wrap_pyfunction!(dpo, m)?)?;
+    // ---- trend / directional ------------------------------------------------
+    m.add_function(wrap_pyfunction!(trend::adx, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::adxr, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::alligator, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::di, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::dm, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::dx, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::ichimoku_cloud, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::safezonestop, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::sar, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::supertrend, m)?)?;
+    m.add_function(wrap_pyfunction!(trend::vi, m)?)?;
 
-    // Phase 3 — Oscillators
-    m.add_function(wrap_pyfunction!(cci, m)?)?;
-    m.add_function(wrap_pyfunction!(cmo, m)?)?;
-    m.add_function(wrap_pyfunction!(cfo, m)?)?;
-    m.add_function(wrap_pyfunction!(cg, m)?)?;
-    m.add_function(wrap_pyfunction!(aroonosc, m)?)?;
-    m.add_function(wrap_pyfunction!(adxr, m)?)?;
-    m.add_function(wrap_pyfunction!(efi, m)?)?;
-    m.add_function(wrap_pyfunction!(emv, m)?)?;
-    m.add_function(wrap_pyfunction!(wad, m)?)?;
-    m.add_function(wrap_pyfunction!(nvi, m)?)?;
-    m.add_function(wrap_pyfunction!(pvi, m)?)?;
-    m.add_function(wrap_pyfunction!(mass, m)?)?;
-    m.add_function(wrap_pyfunction!(pfe, m)?)?;
+    // ---- volume -------------------------------------------------------------
+    m.add_function(wrap_pyfunction!(volume::adosc, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::cvi, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::efi, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::emv, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::nvi, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::pvi, m)?)?;
+    m.add_function(wrap_pyfunction!(volume::wad, m)?)?;
 
-    // Phase 3 — Complex MAs
-    m.add_function(wrap_pyfunction!(hma, m)?)?;
-    m.add_function(wrap_pyfunction!(linearreg, m)?)?;
-    m.add_function(wrap_pyfunction!(lrsi, m)?)?;
-    m.add_function(wrap_pyfunction!(maaq, m)?)?;
-    m.add_function(wrap_pyfunction!(vidya, m)?)?;
-    m.add_function(wrap_pyfunction!(vlma_inner, m)?)?;
-    m.add_function(wrap_pyfunction!(nma, m)?)?;
-    m.add_function(wrap_pyfunction!(jma, m)?)?;
-    m.add_function(wrap_pyfunction!(rsx, m)?)?;
+    // ---- bands / channels / volatility --------------------------------------
+    m.add_function(wrap_pyfunction!(bands::atr, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::bollinger_bands, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::bollinger_bands_width, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::chande, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::chop, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::donchian, m)?)?;
+    m.add_function(wrap_pyfunction!(bands::keltner_inner, m)?)?;
 
-    // Phase 3 — Ehlers filters
-    m.add_function(wrap_pyfunction!(supersmoother, m)?)?;
-    m.add_function(wrap_pyfunction!(supersmoother_3_pole, m)?)?;
-    m.add_function(wrap_pyfunction!(high_pass, m)?)?;
-    m.add_function(wrap_pyfunction!(high_pass_2_pole, m)?)?;
-    m.add_function(wrap_pyfunction!(bandpass, m)?)?;
-    m.add_function(wrap_pyfunction!(gauss, m)?)?;
-    m.add_function(wrap_pyfunction!(reflex, m)?)?;
-    m.add_function(wrap_pyfunction!(trendflex, m)?)?;
-    m.add_function(wrap_pyfunction!(itrend, m)?)?;
-    m.add_function(wrap_pyfunction!(voss, m)?)?;
-    m.add_function(wrap_pyfunction!(edcf, m)?)?;
-    m.add_function(wrap_pyfunction!(correlation_cycle, m)?)?;
+    // ---- Ehlers filters -----------------------------------------------------
+    m.add_function(wrap_pyfunction!(ehlers::bandpass, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::correlation_cycle, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::edcf, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::gauss, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::high_pass, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::high_pass_2_pole, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::itrend, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::mama, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::pma, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::reflex, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::supersmoother, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::supersmoother_3_pole, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::trendflex, m)?)?;
+    m.add_function(wrap_pyfunction!(ehlers::voss, m)?)?;
 
-    // Phase 3 — Candle-based
-    m.add_function(wrap_pyfunction!(heikin_ashi_candles, m)?)?;
-    m.add_function(wrap_pyfunction!(keltner_inner, m)?)?;
-    m.add_function(wrap_pyfunction!(supertrend, m)?)?;
-    m.add_function(wrap_pyfunction!(emd, m)?)?;
-    m.add_function(wrap_pyfunction!(fisher, m)?)?;
-    m.add_function(wrap_pyfunction!(mama, m)?)?;
-    m.add_function(wrap_pyfunction!(pma, m)?)?;
-    m.add_function(wrap_pyfunction!(sar, m)?)?;
+    // ---- candle transforms --------------------------------------------------
+    m.add_function(wrap_pyfunction!(candle::emd, m)?)?;
+    m.add_function(wrap_pyfunction!(candle::heikin_ashi_candles, m)?)?;
+    m.add_function(wrap_pyfunction!(candle::qstick, m)?)?;
 
-    // Phase 3 — Statistical
-    m.add_function(wrap_pyfunction!(safezonestop, m)?)?;
-    m.add_function(wrap_pyfunction!(hurst_rs, m)?)?;
-    m.add_function(wrap_pyfunction!(damiani_volatmeter, m)?)?;
+    // ---- statistical --------------------------------------------------------
+    m.add_function(wrap_pyfunction!(statistical::damiani_volatmeter, m)?)?;
+    m.add_function(wrap_pyfunction!(statistical::hurst_rs, m)?)?;
+    m.add_function(wrap_pyfunction!(statistical::linearreg, m)?)?;
 
-    // Non-indicator utilities
-    m.add_function(wrap_pyfunction!(find_order_index, m)?)?;
+    // ---- utilities ----------------------------------------------------------
+    m.add_function(wrap_pyfunction!(util::find_order_index, m)?)?;
+    m.add_function(wrap_pyfunction!(util::moving_std, m)?)?;
+    m.add_function(wrap_pyfunction!(util::shift, m)?)?;
+    m.add_function(wrap_pyfunction!(util::subtract_floats, m)?)?;
+    m.add_function(wrap_pyfunction!(util::sum_floats, m)?)?;
 
     Ok(())
 }
