@@ -2545,288 +2545,110 @@ fn rma_array(source: &Array1<f64>, period: usize) -> Array1<f64> {
     result
 }
 
-/// Calculate DX (Directional Movement Index) - Ultra-optimized version
+/// Calculate DX (Directional Movement Index) - matches Jesse's Python implementation exactly
+/// Uses Jesse's rma seeding behavior (newseries[-1] = source[-1])
 #[pyfunction]
 pub fn dx(
     candles: PyReadonlyArray2<f64>,
     di_length: usize,
     adx_smoothing: usize,
-    sequential: bool
+    _sequential: bool,
 ) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
     Python::with_gil(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
-        
-        if n < 2 || di_length == 0 || adx_smoothing == 0 {
-            let empty = Array1::<f64>::from_elem(if sequential { n } else { 1 }, f64::NAN);
+
+        if n == 0 {
+            let empty = Array1::<f64>::from_elem(0, f64::NAN);
             return Ok((
                 PyArray1::from_array(py, &empty).to_owned(),
                 PyArray1::from_array(py, &empty).to_owned(),
                 PyArray1::from_array(py, &empty).to_owned(),
             ));
         }
-        
+
         let high = candles_array.slice(s![.., 3]);
         let low = candles_array.slice(s![.., 4]);
         let close = candles_array.slice(s![.., 2]);
-        
-        // Ultra-fast path for non-sequential mode
-        if !sequential {
-            let required_len = di_length + adx_smoothing;
-            if n < required_len {
-                let result = Array1::<f64>::from_elem(1, f64::NAN);
-                return Ok((
-                    PyArray1::from_array(py, &result).to_owned(),
-                    PyArray1::from_array(py, &result).to_owned(),
-                    PyArray1::from_array(py, &result).to_owned(),
-                ));
-            }
-            
-            // Wilder's smoothing factor
-            let alpha = 1.0 / di_length as f64;
-            let one_minus_alpha = 1.0 - alpha;
-            
-            // Initialize accumulators with first period sum
-            let mut tr_sum = 0.0;
-            let mut plus_dm_sum = 0.0;
-            let mut minus_dm_sum = 0.0;
-            
-            // First TR value
-            tr_sum = high[0usize] - low[0usize];
-            
-            // Accumulate initial sums
-            for i in 1..di_length {
-                let up = high[i] - high[i - 1];
-                let down = low[i - 1] - low[i];
-                
-                if up > down && up > 0.0 {
-                    plus_dm_sum += up;
-                }
-                if down > up && down > 0.0 {
-                    minus_dm_sum += down;
-                }
-                
-                let tr1 = high[i] - low[i];
-                let tr2 = (high[i] - close[i - 1]).abs();
-                let tr3 = (low[i] - close[i - 1]).abs();
-                tr_sum += tr1.max(tr2).max(tr3);
-            }
-            
-            // Initial smoothed values
-            let mut tr_smooth = tr_sum;
-            let mut plus_dm_smooth = plus_dm_sum;
-            let mut minus_dm_smooth = minus_dm_sum;
-            
-            // Buffer for DX values to calculate ADX
-            let mut dx_values = Vec::with_capacity(adx_smoothing);
-            
-            // Calculate DX values for ADX smoothing period
-            for i in di_length..(di_length + adx_smoothing) {
-                let up = high[i] - high[i - 1];
-                let down = low[i - 1] - low[i];
-                
-                let plus_dm = if up > down && up > 0.0 { up } else { 0.0 };
-                let minus_dm = if down > up && down > 0.0 { down } else { 0.0 };
-                
-                let tr1 = high[i] - low[i];
-                let tr2 = (high[i] - close[i - 1]).abs();
-                let tr3 = (low[i] - close[i - 1]).abs();
-                let tr = tr1.max(tr2).max(tr3);
-                
-                // Wilder's smoothing
-                tr_smooth = one_minus_alpha * tr_smooth + alpha * tr;
-                plus_dm_smooth = one_minus_alpha * plus_dm_smooth + alpha * plus_dm;
-                minus_dm_smooth = one_minus_alpha * minus_dm_smooth + alpha * minus_dm;
-                
-                // Calculate DX
-                if tr_smooth > 0.0 {
-                    let plus_di = plus_dm_smooth / tr_smooth;
-                    let minus_di = minus_dm_smooth / tr_smooth;
-                    let di_sum = plus_di + minus_di;
-                    
-                    if di_sum > 0.0 {
-                        dx_values.push(100.0 * (plus_di - minus_di).abs() / di_sum);
-                    } else {
-                        dx_values.push(0.0);
-                    }
-                } else {
-                    dx_values.push(0.0);
-                }
-            }
-            
-            // Initial ADX as average
-            let mut adx = dx_values.iter().sum::<f64>() / adx_smoothing as f64;
-            
-            // Continue for remaining periods if any
-            for i in (di_length + adx_smoothing)..n {
-                let up = high[i] - high[i - 1];
-                let down = low[i - 1] - low[i];
-                
-                let plus_dm = if up > down && up > 0.0 { up } else { 0.0 };
-                let minus_dm = if down > up && down > 0.0 { down } else { 0.0 };
-                
-                let tr1 = high[i] - low[i];
-                let tr2 = (high[i] - close[i - 1]).abs();
-                let tr3 = (low[i] - close[i - 1]).abs();
-                let tr = tr1.max(tr2).max(tr3);
-                
-                // Wilder's smoothing
-                tr_smooth = one_minus_alpha * tr_smooth + alpha * tr;
-                plus_dm_smooth = one_minus_alpha * plus_dm_smooth + alpha * plus_dm;
-                minus_dm_smooth = one_minus_alpha * minus_dm_smooth + alpha * minus_dm;
-                
-                // Calculate current DX
-                let dx_val = if tr_smooth > 0.0 {
-                    let plus_di = plus_dm_smooth / tr_smooth;
-                    let minus_di = minus_dm_smooth / tr_smooth;
-                    let di_sum = plus_di + minus_di;
-                    if di_sum > 0.0 { 100.0 * (plus_di - minus_di).abs() / di_sum } else { 0.0 }
-                } else { 0.0 };
-                
-                // Smooth ADX
-                adx = (one_minus_alpha * adx * adx_smoothing as f64 + alpha * dx_val * adx_smoothing as f64) / adx_smoothing as f64;
-            }
-            
-            // Final DI values
-            let plus_di = if tr_smooth > 0.0 { 100.0 * plus_dm_smooth / tr_smooth } else { 0.0 };
-            let minus_di = if tr_smooth > 0.0 { 100.0 * minus_dm_smooth / tr_smooth } else { 0.0 };
-            
-            let adx_result = Array1::from_elem(1, adx);
-            let plus_di_result = Array1::from_elem(1, plus_di);
-            let minus_di_result = Array1::from_elem(1, minus_di);
-            
-            return Ok((
-                PyArray1::from_array(py, &adx_result).to_owned(),
-                PyArray1::from_array(py, &plus_di_result).to_owned(),
-                PyArray1::from_array(py, &minus_di_result).to_owned(),
-            ));
-        }
-        
-        // Sequential mode - optimized full array calculation
-        let mut adx_result = Array1::<f64>::from_elem(n, f64::NAN);
-        let mut plus_di_result = Array1::<f64>::from_elem(n, f64::NAN);
-        let mut minus_di_result = Array1::<f64>::from_elem(n, f64::NAN);
-        
-        let alpha = 1.0 / di_length as f64;
-        let one_minus_alpha = 1.0 - alpha;
-        
-        let mut tr_smooth = 0.0;
-        let mut plus_dm_smooth = 0.0;
-        let mut minus_dm_smooth = 0.0;
-        
-        // Initialize with first period sum
-        tr_smooth = high[0usize] - low[0usize];
-        
-        for i in 1..n.min(di_length) {
+
+        // Build plusDM, minusDM, true_range arrays (matches _fast_dm_tr)
+        let mut plus_dm = vec![0.0f64; n];
+        let mut minus_dm = vec![0.0f64; n];
+        let mut tr = vec![0.0f64; n];
+        tr[0] = high[0usize] - low[0usize];
+        for i in 1..n {
             let up = high[i] - high[i - 1];
             let down = low[i - 1] - low[i];
-            
-            if up > down && up > 0.0 {
-                plus_dm_smooth += up;
-            }
-            if down > up && down > 0.0 {
-                minus_dm_smooth += down;
-            }
-            
-            let tr1 = high[i] - low[i];
-            let tr2 = (high[i] - close[i - 1]).abs();
-            let tr3 = (low[i] - close[i - 1]).abs();
-            tr_smooth += tr1.max(tr2).max(tr3);
+            if up > down && up > 0.0 { plus_dm[i] = up; }
+            if down > up && down > 0.0 { minus_dm[i] = down; }
+            let a = high[i] - low[i];
+            let b = (high[i] - close[i - 1]).abs();
+            let c = (low[i] - close[i - 1]).abs();
+            tr[i] = a.max(b).max(c);
         }
-        
-        // Calculate for remaining periods
-        let mut dx_buffer = Vec::new();
-        
-        for i in di_length..n {
-            let up = high[i] - high[i - 1];
-            let down = low[i - 1] - low[i];
-            
-            let plus_dm = if up > down && up > 0.0 { up } else { 0.0 };
-            let minus_dm = if down > up && down > 0.0 { down } else { 0.0 };
-            
-            let tr1 = high[i] - low[i];
-            let tr2 = (high[i] - close[i - 1]).abs();
-            let tr3 = (low[i] - close[i - 1]).abs();
-            let tr = tr1.max(tr2).max(tr3);
-            
-            // Wilder's smoothing
-            tr_smooth = one_minus_alpha * tr_smooth + alpha * tr;
-            plus_dm_smooth = one_minus_alpha * plus_dm_smooth + alpha * plus_dm;
-            minus_dm_smooth = one_minus_alpha * minus_dm_smooth + alpha * minus_dm;
-            
-            if tr_smooth > 0.0 {
-                plus_di_result[i] = 100.0 * plus_dm_smooth / tr_smooth;
-                minus_di_result[i] = 100.0 * minus_dm_smooth / tr_smooth;
-                
-                let di_sum = plus_di_result[i] + minus_di_result[i];
-                let dx_val = if di_sum > 0.0 {
-                    100.0 * (plus_di_result[i] - minus_di_result[i]).abs() / di_sum
-                } else { 0.0 };
-                
-                dx_buffer.push(dx_val);
-                
-                // Calculate ADX when we have enough DX values
-                if dx_buffer.len() == adx_smoothing {
-                    adx_result[i] = dx_buffer.iter().sum::<f64>() / adx_smoothing as f64;
-                    dx_buffer.remove(0);
-                } else if dx_buffer.len() > adx_smoothing {
-                    let prev_adx = adx_result[i - 1];
-                    adx_result[i] = (prev_adx * (adx_smoothing as f64 - 1.0) + dx_val) / adx_smoothing as f64;
-                }
-            }
+
+        // Jesse-style rma: r[0] = alpha * src[0] + (1-alpha) * src[n-1], then EMA
+        let alpha_di = 1.0 / di_length as f64;
+        let one_minus_di = 1.0 - alpha_di;
+        let mut tr_rma = vec![0.0f64; n];
+        let mut plus_rma = vec![0.0f64; n];
+        let mut minus_rma = vec![0.0f64; n];
+        tr_rma[0] = alpha_di * tr[0] + one_minus_di * tr[n - 1];
+        plus_rma[0] = alpha_di * plus_dm[0] + one_minus_di * plus_dm[n - 1];
+        minus_rma[0] = alpha_di * minus_dm[0] + one_minus_di * minus_dm[n - 1];
+        for i in 1..n {
+            tr_rma[i] = alpha_di * tr[i] + one_minus_di * tr_rma[i - 1];
+            plus_rma[i] = alpha_di * plus_dm[i] + one_minus_di * plus_rma[i - 1];
+            minus_rma[i] = alpha_di * minus_dm[i] + one_minus_di * minus_rma[i - 1];
         }
-        
+
+        // plusDI, minusDI, directional_index
+        let mut plus_di = vec![0.0f64; n];
+        let mut minus_di = vec![0.0f64; n];
+        let mut di_idx = vec![0.0f64; n];
+        for i in 0..n {
+            if tr_rma[i] != 0.0 {
+                plus_di[i] = 100.0 * plus_rma[i] / tr_rma[i];
+                minus_di[i] = 100.0 * minus_rma[i] / tr_rma[i];
+            }
+            let di_sum = plus_di[i] + minus_di[i];
+            let di_diff = (plus_di[i] - minus_di[i]).abs();
+            di_idx[i] = if di_sum == 0.0 { di_diff } else { di_diff / di_sum };
+        }
+
+        // adx = 100 * rma(directional_index, adx_smoothing) — same Jesse-style seeding
+        let alpha_adx = 1.0 / adx_smoothing as f64;
+        let one_minus_adx = 1.0 - alpha_adx;
+        let mut adx = vec![0.0f64; n];
+        adx[0] = 100.0 * (alpha_adx * di_idx[0] + one_minus_adx * di_idx[n - 1]);
+        for i in 1..n {
+            adx[i] = one_minus_adx * adx[i - 1] + 100.0 * alpha_adx * di_idx[i];
+        }
+
         Ok((
-            PyArray1::from_array(py, &adx_result).to_owned(),
-            PyArray1::from_array(py, &plus_di_result).to_owned(),
-            PyArray1::from_array(py, &minus_di_result).to_owned(),
+            PyArray1::from_vec(py, adx).to_owned(),
+            PyArray1::from_vec(py, plus_di).to_owned(),
+            PyArray1::from_vec(py, minus_di).to_owned(),
         ))
     })
 }
 
+
 /// Calculate FOSC (Forecast Oscillator)
 #[pyfunction]
 pub fn fosc(
-    candles: PyReadonlyArray2<f64>, 
-    period: usize, 
-    source_type: &str
+    source: PyReadonlyArray1<f64>,
+    period: usize,
 ) -> PyResult<Py<PyArray1<f64>>> {
     Python::with_gil(|py| {
-        let candles_array = candles.as_array();
-        let n = candles_array.shape()[0];
+        let source = source.as_array();
+        let n = source.len();
         let mut result = Array1::<f64>::from_elem(n, 0.0);
-        
+
         if n < period || period == 0 {
             return Ok(PyArray1::from_array(py, &result).to_owned());
         }
-        
-        // Extract source based on source_type
-        let source = match source_type.to_lowercase().as_str() {
-            "open" => candles_array.slice(s![.., 1]).to_owned(),
-            "high" => candles_array.slice(s![.., 3]).to_owned(),
-            "low" => candles_array.slice(s![.., 4]).to_owned(),
-            "close" => candles_array.slice(s![.., 2]).to_owned(),
-            "hl2" => {
-                let high = candles_array.slice(s![.., 3]);
-                let low = candles_array.slice(s![.., 4]);
-                (&high + &low) / 2.0
-            },
-            "hlc3" => {
-                let high = candles_array.slice(s![.., 3]);
-                let low = candles_array.slice(s![.., 4]);
-                let close = candles_array.slice(s![.., 2]);
-                (&high + &low + &close) / 3.0
-            },
-            "ohlc4" => {
-                let open = candles_array.slice(s![.., 1]);
-                let high = candles_array.slice(s![.., 3]);
-                let low = candles_array.slice(s![.., 4]);
-                let close = candles_array.slice(s![.., 2]);
-                (&open + &high + &low + &close) / 4.0
-            },
-            _ => candles_array.slice(s![.., 2]).to_owned(), // Default to close
-        };
-        
+
         let period_f64 = period as f64;
         let sum_x: f64 = (0..period).map(|i| i as f64).sum();
         let mean_x = sum_x / period_f64;
@@ -2893,102 +2715,83 @@ pub fn frama(
     candles: PyReadonlyArray2<f64>,
     window: usize,
     fc: usize,
-    sc: usize
+    sc: usize,
 ) -> PyResult<Py<PyArray1<f64>>> {
     Python::with_gil(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
-        let mut result = Array1::<f64>::from_elem(n, f64::NAN);
-        
+        let mut result = vec![f64::NAN; n];
+
         // Adjust window to be even if it's not
         let mut n_local = window;
-        if n_local % 2 == 1 {
-            n_local += 1;
-        }
-        
-        if n < n_local {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
-        }
-        
-        // Extract close prices
-        let close = candles_array.slice(s![.., 2]).to_owned();
-        
-        // Calculate w (log of 2/(SC+1))
+        if n_local % 2 == 1 { n_local += 1; }
+        if n < n_local { return Ok(PyArray1::from_vec(py, result).to_owned()); }
+
+        // Extract high/low/close to plain Vec<f64> for fast indexing
+        let high: Vec<f64> = candles_array.slice(s![.., 3]).to_vec();
+        let low: Vec<f64> = candles_array.slice(s![.., 4]).to_vec();
+        let close: Vec<f64> = candles_array.slice(s![.., 2]).to_vec();
+
         let w = (2.0 / (sc as f64 + 1.0)).ln();
-        
-        // Initialize arrays
-        let mut d = Array1::<f64>::from_elem(n, f64::NAN);
-        let mut alphas = Array1::<f64>::from_elem(n, f64::NAN);
-        
-        // Calculate dimension and alphas
+        let half = n_local / 2;
+        let inv_half = 1.0 / half as f64;
+        let inv_full = 1.0 / n_local as f64;
+        let ln2 = 2.0f64.ln();
+        let sc_f = sc as f64;
+        let fc_f = fc as f64;
+        let min_alpha = 2.0 / (sc_f + 1.0);
+
+        let mut d = vec![f64::NAN; n];
+        let mut alphas = vec![f64::NAN; n];
+
         for i in n_local..n {
-            let period_slice = candles_array.slice(s![i-n_local..i, ..]);
-            
-            // Extract period high and low
-            let period_high = period_slice.slice(s![.., 3]);
-            let period_low = period_slice.slice(s![.., 4]);
-            
-            // Split into two halves
-            let half = n_local / 2;
-            
-            // First half
-            let v1_high = period_high.slice(s![half..]);
-            let v1_low = period_low.slice(s![half..]);
-            let v1_high_max = v1_high.fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-            let v1_low_min = v1_low.fold(f64::INFINITY, |a, &b| a.min(b));
-            let n1 = (v1_high_max - v1_low_min) / (half as f64);
-            
-            // Second half
-            let v2_high = period_high.slice(s![..half]);
-            let v2_low = period_low.slice(s![..half]);
-            let v2_high_max = v2_high.fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-            let v2_low_min = v2_low.fold(f64::INFINITY, |a, &b| a.min(b));
-            let n2 = (v2_high_max - v2_low_min) / (half as f64);
-            
-            // Entire period
-            let period_high_max = period_high.fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-            let period_low_min = period_low.fold(f64::INFINITY, |a, &b| a.min(b));
-            let n3 = (period_high_max - period_low_min) / (n_local as f64);
-            
-            // Calculate dimension
+            // Window is candles[i-n_local..i]. Indices in our extracted arrays: [i-n_local, i).
+            let start = i - n_local;
+            let mid = start + half;
+            // Second half (slice [half..]): indices [mid, i)
+            let mut v1_hi = f64::NEG_INFINITY;
+            let mut v1_lo = f64::INFINITY;
+            for k in mid..i {
+                if high[k] > v1_hi { v1_hi = high[k]; }
+                if low[k] < v1_lo { v1_lo = low[k]; }
+            }
+            // First half (slice [..half]): indices [start, mid)
+            let mut v2_hi = f64::NEG_INFINITY;
+            let mut v2_lo = f64::INFINITY;
+            for k in start..mid {
+                if high[k] > v2_hi { v2_hi = high[k]; }
+                if low[k] < v2_lo { v2_lo = low[k]; }
+            }
+            // Full window max/min by combining halves
+            let hi = v1_hi.max(v2_hi);
+            let lo = v1_lo.min(v2_lo);
+            let n1 = (v1_hi - v1_lo) * inv_half;
+            let n2 = (v2_hi - v2_lo) * inv_half;
+            let n3 = (hi - lo) * inv_full;
+
             if n1 > 0.0 && n2 > 0.0 && n3 > 0.0 {
-                d[i] = ((n1 + n2).ln() - n3.ln()) / 2.0f64.ln();
+                d[i] = ((n1 + n2).ln() - n3.ln()) / ln2;
+            } else if i > n_local {
+                d[i] = d[i - 1];
             } else {
-                // Use previous value if calculation is not possible
-                if i > n_local {
-                    d[i] = d[i - 1];
-                } else {
-                    d[i] = 0.0;
-                }
+                d[i] = 0.0;
             }
-            
-            // Calculate alpha
-            let mut old_alpha = (w * (d[i] - 1.0)).exp();
-            old_alpha = old_alpha.max(0.1);
-            old_alpha = old_alpha.min(1.0);
-            
+
+            let old_alpha = (w * (d[i] - 1.0)).exp().clamp(0.1, 1.0);
             let old_n = (2.0 - old_alpha) / old_alpha;
-            let n_val = ((sc as f64 - fc as f64) * ((old_n - 1.0) / (sc as f64 - 1.0))) + fc as f64;
-            let mut alpha = 2.0 / (n_val + 1.0);
-            
-            // Ensure alpha is within bounds
-            if alpha < 2.0 / (sc as f64 + 1.0) {
-                alpha = 2.0 / (sc as f64 + 1.0);
-            } else if alpha > 1.0 {
-                alpha = 1.0;
-            }
-            
+            let n_val = (sc_f - fc_f) * ((old_n - 1.0) / (sc_f - 1.0)) + fc_f;
+            let alpha = (2.0 / (n_val + 1.0)).clamp(min_alpha, 1.0);
             alphas[i] = alpha;
         }
-        
-        // Calculate FRAMA
-        result[n_local - 1] = close.slice(s![..n_local]).mean().unwrap_or(0.0);
-        
+
+        // Calculate FRAMA EMA
+        let seed: f64 = close[..n_local].iter().sum::<f64>() / n_local as f64;
+        result[n_local - 1] = seed;
         for i in n_local..n {
-            result[i] = (alphas[i] * close[i]) + ((1.0 - alphas[i]) * result[i - 1]);
+            result[i] = alphas[i] * close[i] + (1.0 - alphas[i]) * result[i - 1];
         }
-        
-        Ok(PyArray1::from_array(py, &result).to_owned())
+
+        Ok(PyArray1::from_vec(py, result).to_owned())
     })
 }
 
@@ -3303,4 +3106,1917 @@ pub fn subtract_floats(float1: f64, float2: f64) -> PyResult<f64> {
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Result conversion error: {}", e)))?;
     
     Ok(result)
+}
+// ============================================================
+// Private helper functions for shared computation
+// ============================================================
+
+fn ih_ema(source: &[f64], period: usize) -> Vec<f64> {
+    let n = source.len();
+    let mut r = vec![0.0f64; n];
+    if n == 0 { return r; }
+    let alpha = 2.0 / (period as f64 + 1.0);
+    r[0] = source[0];
+    for i in 1..n { r[i] = alpha * source[i] + (1.0 - alpha) * r[i-1]; }
+    r
+}
+
+fn ih_sma(source: &[f64], period: usize) -> Vec<f64> {
+    let n = source.len();
+    let mut r = vec![f64::NAN; n];
+    if period == 0 || n < period { return r; }
+    let pf = period as f64;
+    let mut sum: f64 = source[..period].iter().sum();
+    r[period-1] = sum / pf;
+    for i in period..n { sum += source[i] - source[i-period]; r[i] = sum / pf; }
+    r
+}
+
+fn ih_wma(source: &[f64], period: usize) -> Vec<f64> {
+    let n = source.len();
+    let mut r = vec![0.0f64; n];
+    if period == 0 { return r; }
+    let ws: f64 = (1..=period).map(|x| x as f64).sum();
+    for i in period.saturating_sub(1)..n {
+        if i + 1 < period { continue; }
+        let mut w = 0.0;
+        for j in 0..period { w += source[i - j] * (period - j) as f64; }
+        r[i] = w / ws;
+    }
+    r
+}
+
+fn ih_supersmoother_2pole(source: &[f64], period: f64) -> Vec<f64> {
+    let n = source.len();
+    let mut r = source.to_vec();
+    let pi = std::f64::consts::PI;
+    let a = (-1.414 * pi / period).exp();
+    let b = 2.0 * a * (1.414 * pi / period).cos();
+    let c1 = (1.0 + a * a - b) / 2.0;
+    for i in 2..n {
+        r[i] = c1 * (source[i] + source[i-1]) + b * r[i-1] - a * a * r[i-2];
+    }
+    r
+}
+
+fn ih_high_pass_1pole(source: &[f64], period: f64) -> Vec<f64> {
+    let n = source.len();
+    let mut r = source.to_vec();
+    let pi = std::f64::consts::PI;
+    let sv = (2.0 * pi / period).sin();
+    let cv = (2.0 * pi / period).cos();
+    let alpha = 1.0 + (sv - 1.0) / cv;
+    let c = 1.0 - alpha / 2.0;
+    for i in 1..n {
+        r[i] = c * source[i] - c * source[i-1] + (1.0 - alpha) * r[i-1];
+    }
+    r
+}
+
+fn ih_atr_wilder(high: &[f64], low: &[f64], close: &[f64], period: usize) -> Vec<f64> {
+    let n = close.len();
+    let mut tr = vec![0.0f64; n];
+    tr[0] = high[0] - low[0];
+    for i in 1..n {
+        tr[i] = (high[i] - low[i]).max((high[i] - close[i-1]).abs()).max((low[i] - close[i-1]).abs());
+    }
+    let mut r = vec![f64::NAN; n];
+    if n < period { return r; }
+    r[period-1] = tr[..period].iter().sum::<f64>() / period as f64;
+    for i in period..n {
+        r[i] = (r[i-1] * (period as f64 - 1.0) + tr[i]) / period as f64;
+    }
+    r
+}
+
+// ============================================================
+// Phase 3 — New Indicator Implementations
+// ============================================================
+
+/// Cubed Weighted Moving Average
+#[pyfunction]
+pub fn cwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powi(3)).collect();
+        let ws: f64 = weights.iter().sum();
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_ws = 1.0 / ws;
+        for j in (period + 1)..n {
+            let mut s = 0.0f64;
+            for i in 0..(period - 1) {
+                s += src[j - i] * weights[i];
+            }
+            r[j] = s * inv_ws;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Squared Weighted Moving Average
+#[pyfunction]
+pub fn sqwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powi(2)).collect();
+        let ws: f64 = weights.iter().sum();
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_ws = 1.0 / ws;
+        for j in (period + 1)..n {
+            let mut s = 0.0f64;
+            for i in 0..(period - 1) {
+                s += src[j - i] * weights[i];
+            }
+            r[j] = s * inv_ws;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Square Root Weighted Moving Average
+#[pyfunction]
+pub fn srwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).sqrt()).collect();
+        let ws: f64 = weights.iter().sum();
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_ws = 1.0 / ws;
+        for j in (period + 1)..n {
+            let mut s = 0.0f64;
+            for i in 0..(period - 1) {
+                s += src[j - i] * weights[i];
+            }
+            r[j] = s * inv_ws;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Variable Power Weighted Moving Average
+#[pyfunction]
+pub fn vpwma(source: PyReadonlyArray1<f64>, period: usize, power: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // Pre-compute weights once
+        let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powf(power)).collect();
+        let ws: f64 = weights.iter().sum();
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_ws = 1.0 / ws;
+        for j in (period + 1)..n {
+            let mut s = 0.0f64;
+            for i in 0..(period - 1) {
+                s += src[j - i] * weights[i];
+            }
+            r[j] = s * inv_ws;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// End Point Moving Average
+#[pyfunction]
+pub fn epma(source: PyReadonlyArray1<f64>, period: usize, offset: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if period < 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let start = period + offset + 1;
+        if n <= start { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let weights: Vec<f64> = (0..(period - 1))
+            .map(|i| (period as isize - i as isize - offset as isize) as f64)
+            .collect();
+        let ws: f64 = weights.iter().sum();
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_ws = 1.0 / ws;
+        for j in start..n {
+            let mut s = 0.0f64;
+            for i in 0..(period - 1) {
+                s += src[j - i] * weights[i];
+            }
+            r[j] = s * inv_ws;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// QStick — SMA of (close - open)
+#[pyfunction]
+pub fn qstick(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut r = vec![0.0f64; n];
+        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let inv_p = 1.0 / period as f64;
+        let mut sum: f64 = (0..period).map(|k| c[[k, 2]] - c[[k, 1]]).sum();
+        r[period - 1] = sum * inv_p;
+        for i in period..n {
+            sum += (c[[i, 2]] - c[[i, 1]]) - (c[[i - period, 2]] - c[[i - period, 1]]);
+            r[i] = sum * inv_p;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// RMA — Wilder's EMA (alpha = 1/length)
+#[pyfunction]
+pub fn rma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let alpha = 1.0 / length as f64;
+        let mut r: Vec<f64> = src.to_vec();
+        // Seed with last element to match Jesse's original rma_fast behavior:
+        // rma_fast uses newseries[i-1] which wraps to newseries[-1] = source[-1] when i=0
+        r[0] = alpha * src[0] + (1.0 - alpha) * src[n - 1];
+        for i in 1..n {
+            r[i] = alpha * src[i] + (1.0 - alpha) * r[i-1];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Wilders Smoothing (same as rma with period param)
+#[pyfunction]
+pub fn wilders(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r: Vec<f64> = src.to_vec();
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let pf = period as f64;
+        let alpha = 1.0 / pf;
+        let one_minus_alpha = 1.0 - alpha;
+        // r[i] = (r[i-1] * (period - 1) + src[i]) / period = (1-1/period)*r[i-1] + (1/period)*src[i]
+        for i in 1..n {
+            r[i] = alpha * src[i] + one_minus_alpha * r[i - 1];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// McGinley Dynamic
+#[pyfunction]
+pub fn mcginley_dynamic(source: PyReadonlyArray1<f64>, period: usize, k: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        r[0] = src[0];
+        for i in 1..n {
+            let prev = r[i-1];
+            let ratio = src[i] / prev;
+            let denom = (k * period as f64 * ratio.powi(4)).max(1.0);
+            r[i] = prev + (src[i] - prev) / denom;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// MWDX Average
+#[pyfunction]
+pub fn mwdx(source: PyReadonlyArray1<f64>, factor: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let val2 = 2.0 / factor - 1.0;
+        let fac = 2.0 / (val2 + 1.0);
+        let mut r: Vec<f64> = src.to_vec();
+        for i in 1..n {
+            r[i] = fac * src[i] + (1.0 - fac) * r[i-1];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Holt-Winter Moving Average
+#[pyfunction]
+pub fn hwma(source: PyReadonlyArray1<f64>, na: f64, nb: f64, nc: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![0.0f64; n];
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let (mut last_a, mut last_v, mut last_f) = (0.0f64, 0.0f64, src[0]);
+        for i in 0..n {
+            let f = (1.0 - na) * (last_f + last_v + 0.5 * last_a) + na * src[i];
+            let v = (1.0 - nb) * (last_v + last_a) + nb * (f - last_f);
+            let a = (1.0 - nc) * last_a + nc * (v - last_v);
+            r[i] = f + v + 0.5 * a;
+            last_a = a; last_f = f; last_v = v;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// TRIX — triple EMA of log(price), percent change * 10000
+#[pyfunction]
+pub fn trix(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let log_src: Vec<f64> = src.iter().map(|&x| x.ln()).collect();
+        let e1 = ih_ema(&log_src, period);
+        let e2 = ih_ema(&e1, period);
+        let e3 = ih_ema(&e2, period);
+        let mut r = vec![f64::NAN; n];
+        for i in 1..n { r[i] = (e3[i] - e3[i-1]) * 10000.0; }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// DPO — Detrended Price Oscillator
+#[pyfunction]
+pub fn dpo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let shift = period / 2 + 1;
+        let sma_vals = ih_sma(src.as_slice().unwrap(), period);
+        let invalid = period - 1 + shift;
+        let mut r = vec![f64::NAN; n];
+        for i in invalid..n {
+            if i >= shift {
+                r[i] = src[i - shift] - sma_vals[i];
+            }
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// CCI — Commodity Channel Index
+#[pyfunction]
+pub fn cci(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let tp: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]] + c[[i,2]]) / 3.0).collect();
+        let mut r = vec![f64::NAN; n];
+        for i in (period-1)..n {
+            let start = i + 1 - period;
+            let sma: f64 = tp[start..=i].iter().sum::<f64>() / period as f64;
+            let md: f64 = tp[start..=i].iter().map(|&x| (x - sma).abs()).sum::<f64>() / period as f64;
+            r[i] = if md == 0.0 { 0.0 } else { (tp[i] - sma) / (0.015 * md) };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// CMO — Chande Momentum Oscillator
+#[pyfunction]
+pub fn cmo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if n <= period || period == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // Pre-split diffs into positive and negative magnitudes
+        let mut pos_arr = vec![0.0f64; n - 1];
+        let mut neg_arr = vec![0.0f64; n - 1];
+        for i in 0..n - 1 {
+            let d = src[i + 1] - src[i];
+            if d > 0.0 { pos_arr[i] = d; } else if d < 0.0 { neg_arr[i] = -d; }
+        }
+        // Rolling window sum over [i-period, i) which is pos_arr/neg_arr indices [i-period, i-1]
+        // First window for i=period: indices [0..period]
+        let mut pos: f64 = pos_arr[..period].iter().sum();
+        let mut neg: f64 = neg_arr[..period].iter().sum();
+        let denom = pos + neg;
+        r[period] = if denom == 0.0 { 0.0 } else { 100.0 * (pos - neg) / denom };
+        for i in (period + 1)..n {
+            // Slide: remove pos_arr[i-period-1], add pos_arr[i-1]
+            pos += pos_arr[i - 1] - pos_arr[i - period - 1];
+            neg += neg_arr[i - 1] - neg_arr[i - period - 1];
+            let denom = pos + neg;
+            r[i] = if denom == 0.0 { 0.0 } else { 100.0 * (pos - neg) / denom };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// CFO — Chande Forecast Oscillator
+#[pyfunction]
+pub fn cfo(source: PyReadonlyArray1<f64>, period: usize, scalar: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let pf = period as f64;
+        let sx: f64 = (0..period).map(|j| j as f64).sum();
+        let sxx: f64 = (0..period).map(|j| (j as f64).powi(2)).sum();
+        let denom = pf * sxx - sx * sx;
+        // sxy_i = B_i - (i-period+1)*A_i where A_i = sum src[k] and B_i = sum k*src[k] over window
+        let mut a: f64 = src.slice(s![0..period]).iter().sum();
+        let mut b: f64 = (0..period).map(|k| (k as f64) * src[k]).sum();
+        // First valid index: i = period - 1
+        let i0 = period - 1;
+        {
+            let sxy = b - (i0 as f64 - pf + 1.0) * a;
+            let slope = (pf * sxy - sx * a) / denom;
+            let intercept = (a - slope * sx) / pf;
+            let reg_val = intercept + slope * (pf - 1.0);
+            r[i0] = if src[i0] != 0.0 { scalar * (src[i0] - reg_val) / src[i0] } else { f64::NAN };
+        }
+        for i in period..n {
+            let kout = i - period;
+            a += src[i] - src[kout];
+            b += (i as f64) * src[i] - (kout as f64) * src[kout];
+            let sxy = b - (i as f64 - pf + 1.0) * a;
+            let slope = (pf * sxy - sx * a) / denom;
+            let intercept = (a - slope * sx) / pf;
+            let reg_val = intercept + slope * (pf - 1.0);
+            r[i] = if src[i] != 0.0 { scalar * (src[i] - reg_val) / src[i] } else { f64::NAN };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// CG — Center of Gravity
+#[pyfunction]
+pub fn cg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if period < 2 || n <= period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // For window k in [i-period+2, i] (length period-1):
+        //   denom = sum src[k]
+        //   num   = sum (1 + i - k) * src[k] = (1+i)*denom - sum k*src[k]
+        // Maintain rolling sums.
+        let w = period - 1;
+        let first_i = period + 1;
+        let lo0 = first_i - w + 1; // = period + 1 - (period - 1) + 1 = 3? wait
+        // window for i=first_i: k in [first_i - w + 1, first_i] = [first_i - period + 2, first_i]
+        // For period=10, first_i=11, window = [3, 11] inclusive (length 9).
+        let start_k = first_i + 2 - period;
+        let mut denom: f64 = src.slice(s![start_k..=first_i]).iter().sum();
+        let mut sum_kx: f64 = (start_k..=first_i).map(|k| (k as f64) * src[k]).sum();
+        let num0 = (1.0 + first_i as f64) * denom - sum_kx;
+        r[first_i] = if denom != 0.0 { -num0 / denom } else { 0.0 };
+        for i in (first_i + 1)..n {
+            // Add k=i, remove k=i-(period-1)=i-period+1... wait window length w=period-1
+            // For i, window is [i - period + 2, i]
+            let kin = i;
+            let kout = i - period + 1; // (i-1) - (period-1) + 1 = i - period + 1
+            denom += src[kin] - src[kout];
+            sum_kx += (kin as f64) * src[kin] - (kout as f64) * src[kout];
+            let num = (1.0 + i as f64) * denom - sum_kx;
+            r[i] = if denom != 0.0 { -num / denom } else { 0.0 };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Aroon Oscillator
+#[pyfunction]
+pub fn aroonosc(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut r = vec![f64::NAN; n];
+        for i in (period-1)..n {
+            let start = i + 1 - period;
+            let mut best_val = c[[start,3]];
+            let mut best_idx = 0usize;
+            let mut worst_val = c[[start,4]];
+            let mut worst_idx = 0usize;
+            for j in 0..period {
+                if c[[start+j,3]] > best_val { best_val = c[[start+j,3]]; best_idx = j; }
+                if c[[start+j,4]] < worst_val { worst_val = c[[start+j,4]]; worst_idx = j; }
+            }
+            r[i] = 100.0 * (best_idx as f64 - worst_idx as f64) / period as f64;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// ADXR — Average Directional Movement Index Rating
+#[pyfunction]
+pub fn adxr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut tr = vec![0.0f64; n];
+        let mut dmp = vec![0.0f64; n];
+        let mut dmm = vec![0.0f64; n];
+        tr[0] = c[[0,3]] - c[[0,4]];
+        for i in 1..n {
+            tr[i] = (c[[i,3]] - c[[i,4]]).max((c[[i,3]] - c[[i-1,2]]).abs()).max((c[[i,4]] - c[[i-1,2]]).abs());
+            let up = c[[i,3]] - c[[i-1,3]];
+            let dn = c[[i-1,4]] - c[[i,4]];
+            dmp[i] = if up > dn && up > 0.0 { up } else { 0.0 };
+            dmm[i] = if dn > up && dn > 0.0 { dn } else { 0.0 };
+        }
+        let mut str_ = vec![0.0f64; n];
+        let mut sdmp = vec![0.0f64; n];
+        let mut sdmm = vec![0.0f64; n];
+        str_[0] = tr[0]; sdmp[0] = dmp[0]; sdmm[0] = dmm[0];
+        for i in 1..n {
+            str_[i] = str_[i-1] - str_[i-1] / period as f64 + tr[i];
+            sdmp[i] = sdmp[i-1] - sdmp[i-1] / period as f64 + dmp[i];
+            sdmm[i] = sdmm[i-1] - sdmm[i-1] / period as f64 + dmm[i];
+        }
+        let mut dx = vec![0.0f64; n];
+        for i in 0..n {
+            if str_[i] != 0.0 {
+                let di_p = sdmp[i] / str_[i] * 100.0;
+                let di_m = sdmm[i] / str_[i] * 100.0;
+                let s = di_p + di_m;
+                dx[i] = if s != 0.0 { (di_p - di_m).abs() / s * 100.0 } else { 0.0 };
+            }
+        }
+        let mut adx_val = vec![f64::NAN; n];
+        for i in (period-1)..n {
+            adx_val[i] = dx[i+1-period..=i].iter().sum::<f64>() / period as f64;
+        }
+        let mut result = vec![f64::NAN; n];
+        for i in period..n {
+            if !adx_val[i].is_nan() && !adx_val[i-period].is_nan() {
+                result[i] = (adx_val[i] + adx_val[i-period]) / 2.0;
+            }
+        }
+        Ok(PyArray1::from_vec(py, result).to_owned())
+    })
+}
+
+/// EFI — Elder's Force Index
+#[pyfunction]
+pub fn efi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let c = candles.as_array();
+        let n = src.len();
+        if n < 2 { return Ok(PyArray1::from_vec(py, vec![f64::NAN; n]).to_owned()); }
+        let raw: Vec<f64> = (1..n).map(|i| (src[i] - src[i-1]) * c[[i,5]]).collect();
+        let ema_vals = ih_ema(&raw, period);
+        let mut r = vec![f64::NAN; n];
+        for i in period..n { r[i] = ema_vals[i - 1]; }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// EMV — Ease of Movement
+#[pyfunction]
+pub fn emv(candles: PyReadonlyArray2<f64>, length: usize, div: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut emv_raw = vec![0.0f64; n];
+        for i in 1..n {
+            let hl2_prev = (c[[i-1,3]] + c[[i-1,4]]) / 2.0;
+            let hl2_curr = (c[[i,3]] + c[[i,4]]) / 2.0;
+            let hl2_chg = hl2_curr - hl2_prev;
+            let vol = c[[i,5]];
+            emv_raw[i] = if vol != 0.0 { div * hl2_chg * (c[[i,3]] - c[[i,4]]) / vol } else { 0.0 };
+        }
+        let mut r = vec![0.0f64; n];
+        for i in (length-1)..n {
+            r[i] = emv_raw[i+1-length..=i].iter().sum::<f64>() / length as f64;
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// WAD — Williams Accumulation/Distribution
+/// Note: uses candles[:,1] (open) as "close" per original code
+#[pyfunction]
+pub fn wad(candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut ad = vec![0.0f64; n];
+        for i in 1..n {
+            let close = c[[i,1]]; // WAD uses open column as "close"
+            let prev_close = c[[i-1,1]];
+            ad[i] = if close > prev_close {
+                close - c[[i,4]].min(prev_close)
+            } else if close < prev_close {
+                close - c[[i,3]].max(prev_close)
+            } else { 0.0 };
+        }
+        let mut r = vec![0.0f64; n];
+        let mut cum = 0.0f64;
+        for i in 0..n { cum += ad[i]; r[i] = cum; }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// NVI — Negative Volume Index
+#[pyfunction]
+pub fn nvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let c = candles.as_array();
+        let n = src.len();
+        let mut r = vec![1000.0f64; n];
+        for i in 1..n {
+            if c[[i,5]] < c[[i-1,5]] {
+                r[i] = r[i-1] * (1.0 + (src[i] - src[i-1]) / src[i-1]);
+            } else {
+                r[i] = r[i-1];
+            }
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// PVI — Positive Volume Index
+#[pyfunction]
+pub fn pvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let c = candles.as_array();
+        let n = src.len();
+        let mut r = vec![1000.0f64; n];
+        for i in 1..n {
+            if c[[i,5]] > c[[i-1,5]] {
+                r[i] = r[i-1] * (1.0 + (src[i] - src[i-1]) / src[i-1]);
+            } else {
+                r[i] = r[i-1];
+            }
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// MASS — Mass Index
+#[pyfunction]
+pub fn mass(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let hl: Vec<f64> = (0..n).map(|i| c[[i,3]] - c[[i,4]]).collect();
+        let e1 = ih_ema(&hl, 9);
+        let e2 = ih_ema(&e1, 9);
+        let ratio: Vec<f64> = (0..n).map(|i| if e2[i] != 0.0 { e1[i] / e2[i] } else { 0.0 }).collect();
+        let mut r = vec![0.0f64; n];
+        for i in (period-1)..n {
+            r[i] = ratio[i+1-period..=i].iter().sum();
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// PFE — Polarized Fractal Efficiency
+#[pyfunction]
+pub fn pfe(source: PyReadonlyArray1<f64>, period: usize, smoothing: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let n = src.len();
+        let ln = period - 1; // lookback = period - 1
+
+        // Compute ln-th order differences (matches Python's np.diff(source, ln))
+        // Each iteration reduces length by 1; after ln iterations: length = n - ln
+        let mut d: Vec<f64> = src.clone();
+        for _ in 0..ln {
+            d = d.windows(2).map(|w| w[1] - w[0]).collect();
+        }
+        // d has length n - ln
+
+        // a[i] = sqrt(d[i]^2 + period^2)
+        let a: Vec<f64> = d.iter().map(|&x| (x * x + (period as f64).powi(2)).sqrt()).collect();
+
+        // First differences and their sqrt(1 + dx^2) terms; length = n - 1
+        let sqrt_term: Vec<f64> = src.windows(2).map(|w| {
+            let dx = w[1] - w[0];
+            (1.0 + dx * dx).sqrt()
+        }).collect();
+
+        // Rolling sum of sqrt_term with window = ln; matches rolling_sum(sqrt_term, ln)
+        // Result: first (ln-1) elements are NaN, then (n-ln) valid sums
+        // Total length: n - 1 (same as sqrt_term)
+        let mut b: Vec<f64> = vec![f64::NAN; ln - 1];
+        if sqrt_term.len() >= ln {
+            let init: f64 = sqrt_term[..ln].iter().sum();
+            b.push(init);
+            for i in ln..sqrt_term.len() {
+                let prev = *b.last().unwrap();
+                b.push(prev + sqrt_term[i] - sqrt_term[i - ln]);
+            }
+        }
+        // b has length n - 1
+
+        // Align to source length (same_length behavior: prepend NaN to shorter array)
+        // a_sl: prepend (n - (n-ln)) = ln NaN → a_sl[i] = a[i-ln] for i >= ln
+        // b_sl: prepend (n - (n-1)) = 1 NaN → b_sl[i] = b[i-1] for i >= 1
+        // diff_sl: same as a_sl, d[i-ln] for i >= ln
+        let mut pfetmp = vec![0.0f64; n];
+        let mut sign = vec![-1.0f64; n]; // default: -1 (NaN > 0 is False)
+        for i in ln..n {
+            let a_val = a[i - ln];
+            let b_val = if i >= 1 { b[i - 1] } else { f64::NAN };
+            pfetmp[i] = if b_val.is_nan() || b_val == 0.0 {
+                0.0
+            } else {
+                100.0 * a_val / b_val
+            };
+            if d[i - ln] > 0.0 {
+                sign[i] = 1.0;
+            }
+        }
+
+        let signed: Vec<f64> = sign.iter().zip(pfetmp.iter()).map(|(s, p)| s * p).collect();
+        let r = ih_ema(&signed, smoothing);
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// HMA — Hull Moving Average
+#[pyfunction]
+pub fn hma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let n = src.len();
+        let half = period / 2;
+        let sq = (period as f64).sqrt() as usize;
+        let wma_half = ih_wma(&src, half);
+        let wma_full = ih_wma(&src, period);
+        let raw: Vec<f64> = (0..n).map(|i| 2.0 * wma_half[i] - wma_full[i]).collect();
+        let r = ih_wma(&raw, sq);
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Linear Regression Value
+#[pyfunction]
+pub fn linearreg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        let mean_x = (period as f64 - 1.0) / 2.0;
+        let sxx: f64 = (0..period).map(|j| (j as f64 - mean_x).powi(2)).sum();
+        for i in (period-1)..n {
+            let win = &src.as_slice().unwrap()[i+1-period..=i];
+            let mean_y = win.iter().sum::<f64>() / period as f64;
+            let sxy: f64 = win.iter().enumerate().map(|(j, &y)| (y - mean_y) * (j as f64 - mean_x)).sum();
+            r[i] = mean_y + mean_x * (sxy / sxx);
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Laguerre RSI
+#[pyfunction]
+pub fn lrsi(candles: PyReadonlyArray2<f64>, alpha: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let price: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
+        let gamma = 1.0 - alpha;
+        let (mut l0, mut l1, mut l2, mut l3) = (price[0], price[0], price[0], price[0]);
+        let mut r = vec![0.0f64; n];
+        for i in 0..n {
+            let new_l0 = alpha * price[i] + gamma * l0;
+            let new_l1 = -gamma * new_l0 + l0 + gamma * l1;
+            let new_l2 = -gamma * new_l1 + l1 + gamma * l2;
+            let new_l3 = -gamma * new_l2 + l2 + gamma * l3;
+            l0 = new_l0; l1 = new_l1; l2 = new_l2; l3 = new_l3;
+            let mut cu = 0.0f64;
+            let mut cd = 0.0f64;
+            if l0 >= l1 { cu += l0 - l1; } else { cd += l1 - l0; }
+            if l1 >= l2 { cu += l1 - l2; } else { cd += l2 - l1; }
+            if l2 >= l3 { cu += l2 - l3; } else { cd += l3 - l2; }
+            r[i] = if cu + cd == 0.0 { 0.0 } else { cu / (cu + cd) };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// MAAQ — Moving Average Adaptive Q
+#[pyfunction]
+pub fn maaq(source: PyReadonlyArray1<f64>, period: usize, fast_period: usize, slow_period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let fast_sc = 2.0 / (fast_period as f64 + 1.0);
+        let slow_sc = 2.0 / (slow_period as f64 + 1.0);
+        let mut diff = vec![0.0f64; n];
+        for i in 1..n { diff[i] = (src[i] - src[i - 1]).abs(); }
+        let mut r = src.to_vec();
+        if n <= period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // Initial rolling-sum window [period+1-period..=period] = [1..=period]
+        let mut noise: f64 = diff[1..=period].iter().sum();
+        let i0 = period;
+        let signal0 = (src[i0] - src[i0 - period]).abs();
+        let ratio0 = if noise != 0.0 { signal0 / noise } else { 0.0 };
+        let temp0 = (ratio0 * fast_sc + slow_sc).powi(2);
+        r[i0] = r[i0 - 1] + temp0 * (src[i0] - r[i0 - 1]);
+        for i in (period + 1)..n {
+            // Slide: remove diff[i-period], add diff[i]
+            noise += diff[i] - diff[i - period];
+            let signal = (src[i] - src[i - period]).abs();
+            let ratio = if noise != 0.0 { signal / noise } else { 0.0 };
+            let temp = (ratio * fast_sc + slow_sc).powi(2);
+            r[i] = r[i - 1] + temp * (src[i] - r[i - 1]);
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// VIDYA — Variable Index Dynamic Average
+#[pyfunction]
+pub fn vidya(source: PyReadonlyArray1<f64>, length: usize, fix_cmo: bool, select: bool) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let alpha = 2.0 / (length as f64 + 1.0);
+        let cmo_length = if fix_cmo { 9usize } else { length };
+        let mut momm = vec![0.0f64; n];
+        for i in 1..n { momm[i] = src[i] - src[i-1]; }
+        let mut vidya_r = src.to_vec();
+        for i in 1..n {
+            let start = if i + 1 > cmo_length { i + 1 - cmo_length } else { 0 };
+            let (mut sm1, mut sm2) = (0.0f64, 0.0f64);
+            for k in start..=i {
+                if momm[k] >= 0.0 { sm1 += momm[k]; } else { sm2 -= momm[k]; }
+            }
+            let k_val = if select {
+                let tot = sm1 + sm2;
+                if tot != 0.0 { ((sm1 - sm2) / tot * 100.0).abs() / 100.0 } else { 0.0 }
+            } else {
+                let start2 = if i + 1 > length { i + 1 - length } else { 0 };
+                let slice = &src.as_slice().unwrap()[start2..=i];
+                let mean = slice.iter().sum::<f64>() / slice.len() as f64;
+                let var: f64 = slice.iter().map(|&x| (x-mean).powi(2)).sum::<f64>() / slice.len() as f64;
+                var.sqrt()
+            };
+            let eff_alpha = alpha * k_val;
+            vidya_r[i] = eff_alpha * src[i] + (1.0 - eff_alpha) * vidya_r[i-1];
+        }
+        Ok(PyArray1::from_vec(py, vidya_r).to_owned())
+    })
+}
+
+/// VLMA inner loop (called from Python after computing deviation bands)
+#[pyfunction]
+pub fn vlma_inner(
+    source: PyReadonlyArray1<f64>,
+    a: PyReadonlyArray1<f64>,
+    b: PyReadonlyArray1<f64>,
+    c: PyReadonlyArray1<f64>,
+    d: PyReadonlyArray1<f64>,
+    min_period: usize,
+    max_period: usize,
+) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let av = a.as_array();
+        let bv = b.as_array();
+        let cv = c.as_array();
+        let dv = d.as_array();
+        let n = src.len();
+        let mut r = src.to_vec();
+        let mut period = max_period as f64;
+        for i in 1..n {
+            let nz_period = period;
+            let next_period = if bv[i] <= src[i] && src[i] <= cv[i] {
+                nz_period + 1.0
+            } else if src[i] < av[i] || src[i] > dv[i] {
+                nz_period - 1.0
+            } else { nz_period };
+            period = next_period.max(min_period as f64).min(max_period as f64);
+            let sc = 2.0 / (period + 1.0);
+            r[i] = src[i] * sc + (1.0 - sc) * r[i-1];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// NMA — Natural Moving Average
+#[pyfunction]
+pub fn nma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let clipped: Vec<f64> = src.iter().map(|&x| x.max(1e-10)).collect();
+        let ln: Vec<f64> = clipped.iter().map(|&x| x.ln() * 1000.0).collect();
+        let mut r = vec![f64::NAN; n];
+        if period < 1 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // Precompute |ln[k] - ln[k-1]| for k >= 1
+        let mut abs_diff = vec![0.0f64; n];
+        for k in 1..n {
+            abs_diff[k] = (ln[k] - ln[k - 1]).abs();
+        }
+        // Precompute weights: w[i] = sqrt(i+1) - sqrt(i) for i in 0..period
+        let weights: Vec<f64> = (0..period).map(|i| (i as f64 + 1.0).sqrt() - (i as f64).sqrt()).collect();
+        let last_i = period - 1;
+        for j in (period + 1)..n {
+            let mut num = 0.0f64;
+            let mut den = 0.0f64;
+            for i in 0..period {
+                let oi = abs_diff[j - i];
+                num += oi * weights[i];
+                den += oi;
+            }
+            let ratio = if den != 0.0 { num / den } else { 0.0 };
+            r[j] = clipped[j - last_i] * ratio + clipped[j - last_i - 1] * (1.0 - ratio);
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// JMA — Jurik Moving Average
+#[pyfunction]
+pub fn jma(source: PyReadonlyArray1<f64>, period: usize, phase: f64, power: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let phase_ratio = if phase < -100.0 { 0.5 } else if phase > 100.0 { 2.5 } else { phase / 100.0 + 1.5 };
+        let beta = 0.45 * (period as f64 - 1.0) / (0.45 * (period as f64 - 1.0) + 2.0);
+        let alpha = beta.powi(power as i32);
+        let mut e0 = vec![0.0f64; n];
+        let mut e1 = vec![0.0f64; n];
+        let mut e2 = vec![0.0f64; n];
+        let mut jma_v = src.to_vec();
+        for i in 1..n {
+            e0[i] = (1.0 - alpha) * src[i] + alpha * e0[i-1];
+            e1[i] = (src[i] - e0[i]) * (1.0 - beta) + beta * e1[i-1];
+            e2[i] = (e0[i] + phase_ratio * e1[i] - jma_v[i-1]) * (1.0 - alpha).powi(2) + alpha.powi(2) * e2[i-1];
+            jma_v[i] = e2[i] + jma_v[i-1];
+        }
+        Ok(PyArray1::from_vec(py, jma_v).to_owned())
+    })
+}
+
+/// RSX — Relative Strength Xtra
+#[pyfunction]
+pub fn rsx(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        let (mut f0, mut f8) = (0.0f64, 0.0f64);
+        let (mut f18, mut f20) = (0.0f64, 0.0f64);
+        let (mut f28, mut f30) = (0.0f64, 0.0f64);
+        let (mut f38, mut f40) = (0.0f64, 0.0f64);
+        let (mut f48, mut f50) = (0.0f64, 0.0f64);
+        let (mut f58, mut f60) = (0.0f64, 0.0f64);
+        let (mut f68, mut f70) = (0.0f64, 0.0f64);
+        let (mut f78, mut f80) = (0.0f64, 0.0f64);
+        let (mut f88, mut f90) = (0.0f64, 0.0f64);
+        let mut v14 = 0.0f64;
+        let mut v20 = 0.0f64;
+        for i in period..n {
+            if f90 == 0.0 {
+                f90 = 1.0; f0 = 0.0;
+                f88 = if period >= 6 { period as f64 - 1.0 } else { 5.0 };
+                f8 = 100.0 * src[i];
+                f18 = 3.0 / (period as f64 + 2.0);
+                f20 = 1.0 - f18;
+            } else {
+                f90 = if f88 <= f90 { f88 + 1.0 } else { f90 + 1.0 };
+                let f10 = f8;
+                f8 = 100.0 * src[i];
+                let v8 = f8 - f10;
+                f28 = f20 * f28 + f18 * v8;
+                f30 = f18 * f28 + f20 * f30;
+                let vc = f28 * 1.5 - f30 * 0.5;
+                f38 = f20 * f38 + f18 * vc;
+                f40 = f18 * f38 + f20 * f40;
+                let v10 = f38 * 1.5 - f40 * 0.5;
+                f48 = f20 * f48 + f18 * v10;
+                f50 = f18 * f48 + f20 * f50;
+                v14 = f48 * 1.5 - f50 * 0.5;
+                f58 = f20 * f58 + f18 * v8.abs();
+                f60 = f18 * f58 + f20 * f60;
+                let v18 = f58 * 1.5 - f60 * 0.5;
+                f68 = f20 * f68 + f18 * v18;
+                f70 = f18 * f68 + f20 * f70;
+                let v1c = f68 * 1.5 - f70 * 0.5;
+                f78 = f20 * f78 + f18 * v1c;
+                f80 = f18 * f78 + f20 * f80;
+                v20 = f78 * 1.5 - f80 * 0.5;
+                if f88 >= f90 && f8 != f10 { f0 = 1.0; }
+                if f88 == f90 && f0 == 0.0 { f90 = 0.0; }
+            }
+            r[i] = if f88 < f90 && v20 > 1e-10 {
+                ((v14 / v20 + 1.0) * 50.0).min(100.0).max(0.0)
+            } else { 50.0 };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// SuperSmoother 2-pole
+#[pyfunction]
+pub fn supersmoother(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let r = ih_supersmoother_2pole(&src, period as f64);
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// SuperSmoother 3-pole
+#[pyfunction]
+pub fn supersmoother_3_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let pi = std::f64::consts::PI;
+        let a = (-pi / period as f64).exp();
+        let b = 2.0 * a * (1.738 * pi / period as f64).cos();
+        let c = a * a;
+        let mut r = src.to_vec();
+        for i in 3..n {
+            r[i] = (1.0 - c * c - b + b * c) * src[i]
+                 + (b + c) * r[i-1]
+                 + (-c - b * c) * r[i-2]
+                 + c * c * r[i-3];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// High Pass 1-pole
+#[pyfunction]
+pub fn high_pass(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let r = ih_high_pass_1pole(&src, period as f64);
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// High Pass 2-pole
+#[pyfunction]
+pub fn high_pass_2_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let pi = std::f64::consts::PI;
+        let k = 0.707f64;
+        let sv = (2.0 * pi * k / period as f64).sin();
+        let cv = (2.0 * pi * k / period as f64).cos();
+        let alpha = 1.0 + (sv - 1.0) / cv;
+        let c = (1.0 - alpha / 2.0).powi(2);
+        let mut r = src.to_vec();
+        for i in 2..n {
+            r[i] = c * src[i]
+                 - 2.0 * c * src[i-1]
+                 + c * src[i-2]
+                 + 2.0 * (1.0 - alpha) * r[i-1]
+                 - (1.0 - alpha).powi(2) * r[i-2];
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Bandpass Filter → (bp, bp_normalized, signal, trigger)
+#[pyfunction]
+pub fn bandpass(source: PyReadonlyArray1<f64>, period: usize, bandwidth: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let n = src.len();
+        let pi = std::f64::consts::PI;
+        let hp = ih_high_pass_1pole(&src, 4.0 * period as f64 / bandwidth);
+        let beta = (2.0 * pi / period as f64).cos();
+        let gamma = (2.0 * pi * bandwidth / period as f64).cos();
+        let alpha = 1.0 / gamma - (1.0 / (gamma * gamma) - 1.0).sqrt();
+        let mut bp = hp.clone();
+        for i in 2..n {
+            bp[i] = 0.5 * (1.0 - alpha) * (hp[i] - hp[i-2])
+                  + beta * (1.0 + alpha) * bp[i-1]
+                  - alpha * bp[i-2];
+        }
+        // AGC
+        let k = 0.991f64;
+        let mut peak = bp.clone();
+        for i in 1..n {
+            peak[i] = peak[i-1] * k;
+            if bp[i].abs() > peak[i] { peak[i] = bp[i].abs(); }
+        }
+        let bp_norm: Vec<f64> = (0..n).map(|i| if peak[i] != 0.0 { bp[i] / peak[i] } else { 0.0 }).collect();
+        let trigger = ih_high_pass_1pole(&bp_norm, period as f64 / bandwidth / 1.5);
+        let signal: Vec<f64> = (0..n).map(|i| {
+            if bp_norm[i] < trigger[i] { 1.0 } else if trigger[i] < bp_norm[i] { -1.0 } else { 0.0 }
+        }).collect();
+        Ok((
+            PyArray1::from_vec(py, bp).to_owned(),
+            PyArray1::from_vec(py, bp_norm).to_owned(),
+            PyArray1::from_vec(py, signal).to_owned(),
+            PyArray1::from_vec(py, trigger).to_owned(),
+        ))
+    })
+}
+
+/// Gaussian Filter
+#[pyfunction]
+pub fn gauss(source: PyReadonlyArray1<f64>, period: usize, poles: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src_arr = source.as_array();
+        let n_total = src_arr.len();
+        let src: Vec<f64> = src_arr.iter().filter(|x| !x.is_nan()).cloned().collect();
+        let to_fill = n_total - src.len();
+        let pi = std::f64::consts::PI;
+        let beta = (1.0 - (2.0 * pi / period as f64).cos()) / (2.0f64.powf(1.0 / poles as f64) - 1.0);
+        let alpha = -beta + (beta * beta + 2.0 * beta).sqrt();
+        let m = src.len();
+        let mut fil = vec![0.0f64; poles + m];
+        let coeff: Vec<f64> = match poles {
+            1 => vec![alpha, 1.0 - alpha],
+            2 => vec![alpha.powi(2), 2.0 * (1.0 - alpha), -(1.0 - alpha).powi(2)],
+            3 => vec![alpha.powi(3), 3.0*(1.0-alpha), -3.0*(1.0-alpha).powi(2), (1.0-alpha).powi(3)],
+            _ => vec![alpha.powi(4), 4.0*(1.0-alpha), -6.0*(1.0-alpha).powi(2), 4.0*(1.0-alpha).powi(3), -(1.0-alpha).powi(4)],
+        };
+        for i in 0..m {
+            let val: f64 = coeff[0] * src[i] + coeff[1..].iter().enumerate().map(|(k, &c)| {
+                let idx = poles + i - 1 - k;
+                c * fil[idx]
+            }).sum::<f64>();
+            fil[poles + i] = val;
+        }
+        let fil_slice = &fil[poles..];
+        let mut r = vec![f64::NAN; n_total];
+        let start = if to_fill > 0 { to_fill } else { 0 };
+        for (k, &v) in fil_slice.iter().enumerate() {
+            if start + k < n_total { r[start + k] = v; }
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Reflex indicator
+#[pyfunction]
+pub fn reflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let ssf = ih_supersmoother_2pole(&src, period as f64 / 2.0);
+        let n = ssf.len();
+        let mut rf = vec![0.0f64; n];
+        let mut ms = vec![0.0f64; n];
+        let mut sums = vec![0.0f64; n];
+        for i in period..n {
+            let slope = (ssf[i-period] - ssf[i]) / period as f64;
+            let mut my_sum = 0.0f64;
+            for t in 1..=period {
+                my_sum += (ssf[i] + t as f64 * slope) - ssf[i-t];
+            }
+            my_sum /= period as f64;
+            sums[i] = my_sum;
+            ms[i] = 0.04 * sums[i] * sums[i] + 0.96 * ms[i-1];
+            if ms[i] > 0.0 { rf[i] = sums[i] / ms[i].sqrt(); }
+        }
+        Ok(PyArray1::from_vec(py, rf).to_owned())
+    })
+}
+
+/// TrendFlex indicator
+#[pyfunction]
+pub fn trendflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src: Vec<f64> = source.as_array().to_vec();
+        let ssf = ih_supersmoother_2pole(&src, period as f64 / 2.0);
+        let n = ssf.len();
+        let mut tf = vec![0.0f64; n];
+        let mut ms = vec![0.0f64; n];
+        let mut sums = vec![0.0f64; n];
+        for i in period..n {
+            let mut my_sum = 0.0f64;
+            for t in 1..=period { my_sum += ssf[i] - ssf[i-t]; }
+            my_sum /= period as f64;
+            sums[i] = my_sum;
+            ms[i] = 0.04 * sums[i] * sums[i] + 0.96 * ms[i-1];
+            if ms[i] != 0.0 { tf[i] = sums[i] / ms[i].sqrt(); }
+        }
+        Ok(PyArray1::from_vec(py, tf).to_owned())
+    })
+}
+
+/// Instantaneous Trendline → (signal, it, trigger)
+#[pyfunction]
+pub fn itrend(source: PyReadonlyArray1<f64>, alpha: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut it = src.to_vec();
+        for i in 2..7.min(n) {
+            it[i] = (src[i] + 2.0 * src[i-1] + src[i-2]) / 4.0;
+        }
+        for i in 7..n {
+            it[i] = (alpha - alpha * alpha / 4.0) * src[i]
+                  + alpha * alpha / 2.0 * src[i-1]
+                  - (alpha - 3.0 * alpha * alpha / 4.0) * src[i-2]
+                  + 2.0 * (1.0 - alpha) * it[i-1]
+                  - (1.0 - alpha).powi(2) * it[i-2];
+        }
+        let mut trigger = vec![0.0f64; n];
+        let mut signal = vec![0.0f64; n];
+        for i in 0..n {
+            let lag2 = if i >= 20 { it[i-20] } else { it[i] };
+            trigger[i] = 2.0 * it[i] - lag2;
+            signal[i] = if trigger[i] > it[i] { 1.0 } else if trigger[i] < it[i] { -1.0 } else { 0.0 };
+        }
+        Ok((
+            PyArray1::from_vec(py, signal).to_owned(),
+            PyArray1::from_vec(py, it).to_owned(),
+            PyArray1::from_vec(py, trigger).to_owned(),
+        ))
+    })
+}
+
+/// Voss Predictive Filter → (voss, filt)
+#[pyfunction]
+pub fn voss(source: PyReadonlyArray1<f64>, period: usize, predict: usize, bandwidth: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let pi = std::f64::consts::PI;
+        let order = 3 * predict;
+        let f1 = (2.0 * pi / period as f64).cos();
+        let g1 = (bandwidth * 2.0 * pi / period as f64).cos();
+        let s1 = 1.0 / g1 - (1.0 / (g1 * g1) - 1.0).sqrt();
+        let mut filt = vec![0.0f64; n];
+        let mut voss_v = vec![0.0f64; n];
+        for i in 0..n {
+            if i > period && i > 5 && i > order {
+                filt[i] = 0.5 * (1.0 - s1) * (src[i] - src[i-2])
+                        + f1 * (1.0 + s1) * filt[i-1]
+                        - s1 * filt[i-2];
+            }
+        }
+        for i in 0..n {
+            if i > period && i > 5 && i > order {
+                let sumc: f64 = (0..order).map(|count| {
+                    (count + 1) as f64 / order as f64 * voss_v[i - (order - count)]
+                }).sum();
+                voss_v[i] = (3.0 + order as f64) / 2.0 * filt[i] - sumc;
+            }
+        }
+        Ok((
+            PyArray1::from_vec(py, voss_v).to_owned(),
+            PyArray1::from_vec(py, filt).to_owned(),
+        ))
+    })
+}
+
+/// EDCF — Ehlers Distance Coefficient Filter
+#[pyfunction]
+pub fn edcf(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut r = vec![f64::NAN; n];
+        if n < 2 * period || period < 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        // Precompute dist[k] = sum_{lb=1}^{period-1} (src[k] - src[k-lb])^2
+        let mut dist = vec![0.0f64; n];
+        for k in (period - 1)..n {
+            let mut d_sum = 0.0f64;
+            for lb in 1..period {
+                let d = src[k] - src[k - lb];
+                d_sum += d * d;
+            }
+            dist[k] = d_sum;
+        }
+        // r[j] uses k = j-i in [j-period+1, j], so rolling window of size `period` ending at j.
+        let first_j = 2 * period;
+        let mut num: f64 = 0.0;
+        let mut coef: f64 = 0.0;
+        for k in (first_j - period + 1)..=first_j {
+            num += dist[k] * src[k];
+            coef += dist[k];
+        }
+        r[first_j] = if coef != 0.0 { num / coef } else { 0.0 };
+        for j in (first_j + 1)..n {
+            // Slide window: remove k=j-period, add k=j
+            num -= dist[j - period] * src[j - period];
+            coef -= dist[j - period];
+            num += dist[j] * src[j];
+            coef += dist[j];
+            r[j] = if coef != 0.0 { num / coef } else { 0.0 };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Correlation Cycle → (real, imag, angle, state)
+#[pyfunction]
+pub fn correlation_cycle(source: PyReadonlyArray1<f64>, period: usize, threshold: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let pix2 = 4.0 * (1.0f64).asin();
+        let period = period.max(2);
+        let pf = period as f64;
+        let mut real_part = vec![f64::NAN; n];
+        let mut imag_part = vec![f64::NAN; n];
+
+        // Precompute trig terms (depend only on j and period)
+        let yc: Vec<f64> = (0..period).map(|j| (pix2 * (j as f64 + 1.0) / pf).cos()).collect();
+        let ys: Vec<f64> = (0..period).map(|j| -((pix2 * (j as f64 + 1.0) / pf).sin())).collect();
+        let ry: f64 = yc.iter().sum();
+        let iy: f64 = ys.iter().sum();
+        let ryy: f64 = yc.iter().map(|v| v * v).sum();
+        let iyy: f64 = ys.iter().map(|v| v * v).sum();
+        let t2 = pf * ryy - ry * ry;
+        let u2 = pf * iyy - iy * iy;
+        if !(t2 > 0.0 && u2 > 0.0) {
+            // degenerate — fall through with NaN results
+        }
+        let t2_sqrt = if t2 > 0.0 { t2.sqrt() } else { 0.0 };
+        let u2_sqrt = if u2 > 0.0 { u2.sqrt() } else { 0.0 };
+
+        for i in period..n {
+            let (mut rx, mut rxx, mut rxy, mut ixy) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            for j in 0..period {
+                let v = src[i - j - 1];
+                let x = if v.is_nan() { 0.0 } else { v };
+                rx += x;
+                rxx += x * x;
+                rxy += x * yc[j];
+                ixy += x * ys[j];
+            }
+            let t1 = pf * rxx - rx * rx;
+            if t1 > 0.0 && t2_sqrt > 0.0 {
+                real_part[i] = (pf * rxy - rx * ry) / (t1.sqrt() * t2_sqrt);
+            }
+            if t1 > 0.0 && u2_sqrt > 0.0 {
+                imag_part[i] = (pf * ixy - rx * iy) / (t1.sqrt() * u2_sqrt);
+            }
+        }
+        let half_pi = 1.0f64.asin();
+        // Initialize to NaN to match Python behavior (imagPart==0 gives 0.0, NaN gives NaN)
+        let mut angle = vec![f64::NAN; n];
+        for i in 0..n {
+            let im = imag_part[i];
+            let re = real_part[i];
+            if im.is_nan() {
+                // stays NaN
+            } else if im == 0.0 {
+                angle[i] = 0.0;
+                // no subtraction since imag > 0 is false
+            } else {
+                let mut a = ((re / im).atan() + half_pi).to_degrees();
+                if im > 0.0 { a -= 180.0; }
+                angle[i] = a;
+            }
+        }
+        // Vectorized update: use original angles (clone) to match Python's non-sequential np.where
+        let orig_angle = angle.clone();
+        for i in 1..n {
+            let prior = orig_angle[i-1];
+            // NaN > x is false in Rust, so NaN prior means no update
+            if prior > angle[i] && prior - angle[i] < 270.0 { angle[i] = prior; }
+        }
+        let mut state = vec![0.0f64; n];
+        for i in 1..n {
+            let prior = angle[i-1];
+            if (angle[i] - prior).abs() < threshold {
+                state[i] = if angle[i] >= 0.0 { 1.0 } else if angle[i] < 0.0 { -1.0 } else { 0.0 };
+            }
+        }
+        Ok((
+            PyArray1::from_vec(py, real_part).to_owned(),
+            PyArray1::from_vec(py, imag_part).to_owned(),
+            PyArray1::from_vec(py, angle).to_owned(),
+            PyArray1::from_vec(py, state).to_owned(),
+        ))
+    })
+}
+
+/// Heikin Ashi Candles → (open, close, high, low)
+#[pyfunction]
+pub fn heikin_ashi_candles(candles: PyReadonlyArray2<f64>) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut ha_open = vec![f64::NAN; n];
+        let mut ha_close = vec![f64::NAN; n];
+        let mut ha_high = vec![f64::NAN; n];
+        let mut ha_low = vec![f64::NAN; n];
+        for i in 1..n {
+            ha_open[i] = (c[[i-1,1]] + c[[i-1,2]]) / 2.0;
+            ha_close[i] = (c[[i,1]] + c[[i,2]] + c[[i,3]] + c[[i,4]]) / 4.0;
+            ha_high[i] = c[[i,3]].max(ha_open[i]).max(ha_close[i]);
+            ha_low[i] = c[[i,4]].min(ha_open[i]).min(ha_close[i]);
+        }
+        Ok((
+            PyArray1::from_vec(py, ha_open).to_owned(),
+            PyArray1::from_vec(py, ha_close).to_owned(),
+            PyArray1::from_vec(py, ha_high).to_owned(),
+            PyArray1::from_vec(py, ha_low).to_owned(),
+        ))
+    })
+}
+
+/// Keltner Channel inner (takes pre-computed MA) → (upper, middle, lower)
+#[pyfunction]
+pub fn keltner_inner(
+    ma_values: PyReadonlyArray1<f64>,
+    high: PyReadonlyArray1<f64>,
+    low: PyReadonlyArray1<f64>,
+    close: PyReadonlyArray1<f64>,
+    period: usize,
+    multiplier: f64,
+) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let ma = ma_values.as_array();
+        let h = high.as_array();
+        let l = low.as_array();
+        let cl = close.as_array();
+        let n = ma.len();
+        let h_sl = h.as_slice().unwrap();
+        let l_sl = l.as_slice().unwrap();
+        let cl_sl = cl.as_slice().unwrap();
+        let atr_vals = ih_atr_wilder(h_sl, l_sl, cl_sl, period);
+        let mut upper = vec![f64::NAN; n];
+        let mut lower = vec![f64::NAN; n];
+        for i in 0..n {
+            if !atr_vals[i].is_nan() {
+                upper[i] = ma[i] + atr_vals[i] * multiplier;
+                lower[i] = ma[i] - atr_vals[i] * multiplier;
+            }
+        }
+        Ok((
+            PyArray1::from_vec(py, upper).to_owned(),
+            PyArray1::from_vec(py, ma.to_vec()).to_owned(),
+            PyArray1::from_vec(py, lower).to_owned(),
+        ))
+    })
+}
+
+/// SuperTrend → (trend, changed)
+#[pyfunction]
+pub fn supertrend(candles: PyReadonlyArray2<f64>, period: usize, factor: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let h: Vec<f64> = (0..n).map(|i| c[[i,3]]).collect();
+        let l: Vec<f64> = (0..n).map(|i| c[[i,4]]).collect();
+        let cl: Vec<f64> = (0..n).map(|i| c[[i,2]]).collect();
+        let atr_vals = ih_atr_wilder(&h, &l, &cl, period);
+        let mut upper_basic = vec![0.0f64; n];
+        let mut lower_basic = vec![0.0f64; n];
+        let mut upper_band = vec![0.0f64; n];
+        let mut lower_band = vec![0.0f64; n];
+        for i in 0..n {
+            let mid = (c[[i,3]] + c[[i,4]]) / 2.0;
+            let atr = if atr_vals[i].is_nan() { 0.0 } else { atr_vals[i] };
+            upper_basic[i] = mid + factor * atr;
+            lower_basic[i] = mid - factor * atr;
+            upper_band[i] = upper_basic[i];
+            lower_band[i] = lower_basic[i];
+        }
+        let mut trend = vec![0.0f64; n];
+        let mut changed = vec![0.0f64; n];
+        let idx = period.saturating_sub(1);
+        if idx < n {
+            trend[idx] = if c[[idx,2]] <= upper_band[idx] { upper_band[idx] } else { lower_band[idx] };
+        }
+        for i in period..n {
+            let p = i - 1;
+            let prev_cl = c[[p,2]];
+            upper_band[i] = if prev_cl <= upper_band[p] {
+                upper_basic[i].min(upper_band[p])
+            } else { upper_basic[i] };
+            lower_band[i] = if prev_cl >= lower_band[p] {
+                lower_basic[i].max(lower_band[p])
+            } else { lower_basic[i] };
+            if trend[p] == upper_band[p] {
+                if c[[i,2]] <= upper_band[i] {
+                    trend[i] = upper_band[i]; changed[i] = 0.0;
+                } else {
+                    trend[i] = lower_band[i]; changed[i] = 1.0;
+                }
+            } else {
+                if c[[i,2]] >= lower_band[i] {
+                    trend[i] = lower_band[i]; changed[i] = 0.0;
+                } else {
+                    trend[i] = upper_band[i]; changed[i] = 1.0;
+                }
+            }
+        }
+        Ok((
+            PyArray1::from_vec(py, trend).to_owned(),
+            PyArray1::from_vec(py, changed).to_owned(),
+        ))
+    })
+}
+
+/// EMD — Empirical Mode Decomposition → (upperband, middleband, lowerband)
+#[pyfunction]
+pub fn emd(candles: PyReadonlyArray2<f64>, period: usize, delta: f64, fraction: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let price: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
+        let pi = std::f64::consts::PI;
+        let beta = (2.0 * pi / period as f64).cos();
+        let gamma_v = 1.0 / (4.0 * pi * delta / period as f64).cos();
+        let alpha = gamma_v - (gamma_v * gamma_v - 1.0).sqrt();
+        let mut bp = vec![0.0f64; n];
+        for i in 0..n {
+            if i > 2 {
+                bp[i] = 0.5 * (1.0 - alpha) * (price[i] - price[i-2])
+                      + beta * (1.0 + alpha) * bp[i-1]
+                      - alpha * bp[i-2];
+            } else if i == 2 {
+                bp[i] = 0.5 * (1.0 - alpha) * (price[i] - price[i-2]);
+            }
+        }
+        // SMA of bp over 2*period
+        let mean = ih_sma(&bp, 2*period);
+        let mut peak = bp.clone();
+        let mut valley = bp.clone();
+        for i in 0..n {
+            peak[i] = peak[i-1.min(i)];
+            valley[i] = valley[i-1.min(i)];
+            if i > 2 {
+                if bp[i-1] > bp[i] && bp[i-1] > bp[i-2] { peak[i] = bp[i-1]; }
+                if bp[i-1] < bp[i] && bp[i-1] < bp[i-2] { valley[i] = bp[i-1]; }
+            }
+        }
+        let avg_peak: Vec<f64> = {
+            let sp = ih_sma(&peak, 50);
+            sp.iter().map(|&x| x * fraction).collect()
+        };
+        let avg_valley: Vec<f64> = {
+            let sv = ih_sma(&valley, 50);
+            sv.iter().map(|&x| x * fraction).collect()
+        };
+        Ok((
+            PyArray1::from_vec(py, avg_peak).to_owned(),
+            PyArray1::from_vec(py, mean).to_owned(),
+            PyArray1::from_vec(py, avg_valley).to_owned(),
+        ))
+    })
+}
+
+/// Fisher Transform → (fisher, signal)
+#[pyfunction]
+pub fn fisher(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mid: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
+        let mut fisher_v = vec![0.0f64; n];
+        let mut fisher_sig = vec![0.0f64; n];
+        let mut value1 = 0.0f64;
+        for i in period..n {
+            let max_h = mid[i+1-period..=i].iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let min_l = mid[i+1-period..=i].iter().cloned().fold(f64::INFINITY, f64::min);
+            let mut value0 = if max_h - min_l == 0.0 { 0.0 } else {
+                0.33 * 2.0 * ((mid[i] - min_l) / (max_h - min_l) - 0.5) + 0.67 * value1
+            };
+            value0 = value0.min(0.999).max(-0.999);
+            fisher_v[i] = 0.5 * ((1.0 + value0) / (1.0 - value0)).ln() + 0.5 * fisher_v[i-1];
+            fisher_sig[i] = fisher_v[i-1];
+            value1 = value0;
+        }
+        Ok((
+            PyArray1::from_vec(py, fisher_v).to_owned(),
+            PyArray1::from_vec(py, fisher_sig).to_owned(),
+        ))
+    })
+}
+
+/// MAMA — MESA Adaptive Moving Average → (mama, fama)
+#[pyfunction]
+pub fn mama(source: PyReadonlyArray1<f64>, fastlimit: f64, slowlimit: f64) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let pi = std::f64::consts::PI;
+        let mut sp = vec![0.0f64; n];
+        let mut dt = vec![0.0f64; n];
+        let mut q1 = vec![0.0f64; n];
+        let mut i1 = vec![0.0f64; n];
+        let mut ji = vec![0.0f64; n];
+        let mut jq = vec![0.0f64; n];
+        let mut i2 = vec![0.0f64; n];
+        let mut q2 = vec![0.0f64; n];
+        let mut re = vec![0.0f64; n];
+        let mut im = vec![0.0f64; n];
+        let mut p1 = vec![0.0f64; n];
+        let mut p2: f64;
+        let mut p3 = vec![0.0f64; n];
+        let mut p_arr = vec![0.0f64; n];
+        let mut phase = vec![0.0f64; n];
+        let mut mama_v = vec![0.0f64; n];
+        let mut fama_v = vec![0.0f64; n];
+        let g = |i: usize, arr: &Vec<f64>| -> f64 { if i < arr.len() { arr[i] } else { 0.0 } };
+        let gs = |i: usize| -> f64 { if i < n { src[i] } else { 0.0 } };
+        for i in 1..n {
+            sp[i] = (4.0*gs(i) + 3.0*gs(i.saturating_sub(1)) + 2.0*gs(i.saturating_sub(2)) + gs(i.saturating_sub(3))) / 10.0;
+            let pv = g(i.saturating_sub(1), &p_arr);
+            let c075p = 0.075 * pv + 0.54;
+            dt[i] = (0.0962*sp[i] + 0.5769*g(i.saturating_sub(2),&sp) - 0.5769*g(i.saturating_sub(4),&sp) - 0.0962*g(i.saturating_sub(6),&sp)) * c075p;
+            q1[i] = (0.0962*dt[i] + 0.5769*g(i.saturating_sub(2),&dt) - 0.5769*g(i.saturating_sub(4),&dt) - 0.0962*g(i.saturating_sub(6),&dt)) * c075p;
+            i1[i] = g(i.saturating_sub(3), &dt);
+            ji[i] = (0.0962*i1[i] + 0.5769*g(i.saturating_sub(2),&i1) - 0.5769*g(i.saturating_sub(4),&i1) - 0.0962*g(i.saturating_sub(6),&i1)) * c075p;
+            jq[i] = (0.0962*q1[i] + 0.5769*g(i.saturating_sub(2),&q1) - 0.5769*g(i.saturating_sub(4),&q1) - 0.0962*g(i.saturating_sub(6),&q1)) * c075p;
+            let i2t = i1[i] - jq[i];
+            let q2t = q1[i] + ji[i];
+            i2[i] = 0.2*i2t + 0.8*g(i.saturating_sub(1),&i2);
+            q2[i] = 0.2*q2t + 0.8*g(i.saturating_sub(1),&q2);
+            let ret = i2[i]*g(i.saturating_sub(1),&i2) + q2[i]*g(i.saturating_sub(1),&q2);
+            let imt = i2[i]*g(i.saturating_sub(1),&q2) - q2[i]*g(i.saturating_sub(1),&i2);
+            re[i] = 0.2*ret + 0.8*g(i.saturating_sub(1),&re);
+            im[i] = 0.2*imt + 0.8*g(i.saturating_sub(1),&im);
+            p1[i] = if im[i] != 0.0 && re[i] != 0.0 { 2.0*pi/(im[i]/re[i]).atan() } else { pv };
+            let p1v = p1[i];
+            p2 = if p1v > 1.5*pv { 1.5*pv } else if p1v < 0.67*pv { 0.67*pv } else { p1v };
+            p3[i] = p2.max(6.0).min(50.0);
+            p_arr[i] = 0.2*p3[i] + 0.8*pv;
+            phase[i] = if i1[i] != 0.0 { (q1[i]/i1[i]).atan() * 180.0/pi } else { 0.0 };
+            let dphase = ((g(i.saturating_sub(1),&phase) - phase[i]).max(1.0));
+            let alpha_t = (fastlimit / dphase).max(slowlimit).min(fastlimit);
+            mama_v[i] = alpha_t*src[i] + (1.0-alpha_t)*mama_v[i.saturating_sub(1)];
+            fama_v[i] = 0.5*alpha_t*mama_v[i] + (1.0-0.5*alpha_t)*fama_v[i.saturating_sub(1)];
+        }
+        Ok((
+            PyArray1::from_vec(py, mama_v).to_owned(),
+            PyArray1::from_vec(py, fama_v).to_owned(),
+        ))
+    })
+}
+
+/// PMA — Predictive Moving Average → (predict, trigger)
+#[pyfunction]
+pub fn pma(source: PyReadonlyArray1<f64>) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let src = source.as_array();
+        let n = src.len();
+        let mut predict = vec![f64::NAN; n];
+        let mut trigger = vec![f64::NAN; n];
+        let mut wma1 = vec![0.0f64; n];
+        for j in 6..n {
+            wma1[j] = (7.0*src[j] + 6.0*src[j-1] + 5.0*src[j-2] + 4.0*src[j-3] + 3.0*src[j-4] + 2.0*src[j-5] + src[j-6]) / 28.0;
+            let wma2 = (7.0*wma1[j] + 6.0*wma1[j-1] + 5.0*wma1[j-2] + 4.0*wma1[j-3] + 3.0*wma1[j-4] + 2.0*wma1[j-5] + wma1[j-6]) / 28.0;
+            predict[j] = 2.0 * wma1[j] - wma2;
+        }
+        for j in 6..n {
+            if !predict[j].is_nan() && j >= 3 {
+                let p3 = if predict[j-3].is_nan() { 0.0 } else { predict[j-3] };
+                let p2 = if predict[j-2].is_nan() { 0.0 } else { predict[j-2] };
+                let p1 = if predict[j-1].is_nan() { 0.0 } else { predict[j-1] };
+                trigger[j] = (4.0*predict[j] + 3.0*p1 + 2.0*p2 + p3) / 10.0;
+            }
+        }
+        Ok((
+            PyArray1::from_vec(py, predict).to_owned(),
+            PyArray1::from_vec(py, trigger).to_owned(),
+        ))
+    })
+}
+
+/// Parabolic SAR
+#[pyfunction]
+pub fn sar(candles: PyReadonlyArray2<f64>, acceleration: f64, maximum: f64) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        if n == 0 { return Ok(PyArray1::from_vec(py, vec![]).to_owned()); }
+        let high: Vec<f64> = (0..n).map(|i| c[[i,3]]).collect();
+        let low: Vec<f64> = (0..n).map(|i| c[[i,4]]).collect();
+        let mut sar_v = vec![0.0f64; n];
+        let mut uptrend = high[1] > high[0];
+        sar_v[0] = if uptrend { low[0] } else { high[0] };
+        let mut ep = if uptrend { high[0] } else { low[0] };
+        let mut af = acceleration;
+        for i in 1..n {
+            let prev_sar = sar_v[i-1];
+            let mut sar_temp = if uptrend {
+                let mut s = prev_sar + af * (ep - prev_sar);
+                if i >= 2 { s = s.min(low[i-1]).min(low[i-2]); } else { s = s.min(low[i-1]); }
+                s
+            } else {
+                let mut s = prev_sar - af * (prev_sar - ep);
+                if i >= 2 { s = s.max(high[i-1]).max(high[i-2]); } else { s = s.max(high[i-1]); }
+                s
+            };
+            if uptrend {
+                if low[i] < sar_temp {
+                    sar_temp = ep; uptrend = false; af = acceleration; ep = low[i];
+                } else if high[i] > ep {
+                    ep = high[i]; af = (af + acceleration).min(maximum);
+                }
+            } else {
+                if high[i] > sar_temp {
+                    sar_temp = ep; uptrend = true; af = acceleration; ep = high[i];
+                } else if low[i] < ep {
+                    ep = low[i]; af = (af + acceleration).min(maximum);
+                }
+            }
+            sar_v[i] = sar_temp;
+        }
+        Ok(PyArray1::from_vec(py, sar_v).to_owned())
+    })
+}
+
+/// SafeZone Stops
+#[pyfunction]
+pub fn safezonestop(candles: PyReadonlyArray2<f64>, period: usize, mult: f64, max_lookback: usize, direction: bool) -> PyResult<Py<PyArray1<f64>>> {
+    Python::with_gil(|py| {
+        let c = candles.as_array();
+        let n = c.shape()[0];
+        let mut diff_high = vec![0.0f64; n];
+        let mut diff_low = vec![0.0f64; n];
+        for i in 1..n {
+            let dh = c[[i,3]] - c[[i-1,3]];
+            let dl = c[[i-1,4]] - c[[i,4]];
+            diff_high[i] = if dh.is_nan() { 0.0 } else { dh };
+            diff_low[i] = if dl.is_nan() { 0.0 } else { dl };
+        }
+        let mut raw_plus = vec![0.0f64; n];
+        let mut raw_minus = vec![0.0f64; n];
+        for i in 0..n {
+            raw_plus[i] = if diff_high[i] > diff_low[i] && diff_high[i] > 0.0 { diff_high[i] } else { 0.0 };
+            raw_minus[i] = if diff_low[i] > diff_high[i] && diff_low[i] > 0.0 { diff_low[i] } else { 0.0 };
+        }
+        // Wilder smoothing: smoothed[i] = alpha * smoothed[i-1] + raw[i], alpha = (period-1)/period
+        let alpha = 1.0 - 1.0 / period as f64;
+        let mut plus_dm = vec![0.0f64; n];
+        let mut minus_dm = vec![0.0f64; n];
+        plus_dm[0] = raw_plus[0]; minus_dm[0] = raw_minus[0];
+        for i in 1..n {
+            plus_dm[i] = alpha * plus_dm[i-1] + raw_plus[i];
+            minus_dm[i] = alpha * minus_dm[i-1] + raw_minus[i];
+        }
+        let mut intermediate = vec![0.0f64; n];
+        for i in 1..n {
+            intermediate[i] = if direction {
+                c[[i-1,4]] - mult * minus_dm[i]  // long: last_low - mult * minus_dm
+            } else {
+                c[[i-1,3]] + mult * plus_dm[i]   // short: last_high + mult * plus_dm
+            };
+        }
+        let mut r = vec![0.0f64; n];
+        for i in 0..n {
+            let start = i.saturating_sub(max_lookback - 1);
+            r[i] = if direction {
+                intermediate[start..=i].iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+            } else {
+                intermediate[start..=i].iter().cloned().fold(f64::INFINITY, f64::min)
+            };
+        }
+        Ok(PyArray1::from_vec(py, r).to_owned())
+    })
+}
+
+/// Hurst RS (R/S method for Hurst exponent)
+#[pyfunction]
+pub fn hurst_rs(x: PyReadonlyArray1<f64>, min_chunksize: usize, max_chunksize: usize, num_chunksize: usize) -> PyResult<f64> {
+    Python::with_gil(|_py| {
+        let x_arr = x.as_array();
+        let xv: Vec<f64> = x_arr.to_vec();
+        let n = xv.len();
+        let max_cs = max_chunksize + 1;
+        let step = if num_chunksize > 1 { (max_cs - min_chunksize) as f64 / (num_chunksize - 1) as f64 } else { 1.0 };
+        let chunk_sizes: Vec<usize> = (0..num_chunksize).map(|i| (min_chunksize as f64 + i as f64 * step) as usize).collect();
+        let mut rs_values = vec![0.0f64; num_chunksize];
+        for (ci, &cs) in chunk_sizes.iter().enumerate() {
+            let nchunks = n / cs;
+            let mut rs_sum = 0.0f64;
+            let mut valid = 0usize;
+            for idx in 0..nchunks {
+                let chunk = &xv[idx*cs..(idx+1)*cs];
+                let mean = chunk.iter().sum::<f64>() / cs as f64;
+                let mut cum = 0.0f64;
+                let mut z = Vec::with_capacity(cs);
+                for &v in chunk { cum += v - mean; z.push(cum); }
+                let r_val = z.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                          - z.iter().cloned().fold(f64::INFINITY, f64::min);
+                let var: f64 = chunk.iter().map(|&v| (v - mean).powi(2)).sum::<f64>() / cs as f64;
+                let s = var.sqrt();
+                if s > 0.0 { rs_sum += r_val / s; valid += 1; }
+            }
+            rs_values[ci] = if valid > 0 { rs_sum / valid as f64 } else { 0.0 };
+        }
+        // Linear regression: log(rs) = H*log(chunk_size) + c
+        let log_cs: Vec<f64> = chunk_sizes.iter().map(|&x| (x as f64).ln()).collect();
+        let log_rs: Vec<f64> = rs_values.iter().map(|&x| if x > 0.0 { x.ln() } else { 0.0 }).collect();
+        let m = num_chunksize as f64;
+        let sx: f64 = log_cs.iter().sum();
+        let sy: f64 = log_rs.iter().sum();
+        let sxx: f64 = log_cs.iter().map(|&x| x*x).sum();
+        let sxy: f64 = log_cs.iter().zip(log_rs.iter()).map(|(&x,&y)| x*y).sum();
+        let h = (m*sxy - sx*sy) / (m*sxx - sx*sx);
+        Ok(h)
+    })
+}
+
+/// Population rolling std with window
+fn rolling_std_pop(source: &[f64], window: usize) -> Vec<f64> {
+    let n = source.len();
+    let mut result = vec![0.0f64; n];
+    if window == 0 || window > n { return result; }
+    let mut sum: f64 = 0.0;
+    let mut sum_sq: f64 = 0.0;
+    for i in 0..window {
+        sum += source[i];
+        sum_sq += source[i] * source[i];
+    }
+    let w = window as f64;
+    let mean = sum / w;
+    let var = (sum_sq / w - mean * mean).max(0.0);
+    result[window - 1] = var.sqrt();
+    for i in window..n {
+        sum += source[i] - source[i - window];
+        sum_sq += source[i] * source[i] - source[i - window] * source[i - window];
+        let mean = sum / w;
+        let var = (sum_sq / w - mean * mean).max(0.0);
+        result[i] = var.sqrt();
+    }
+    result
+}
+
+/// Damiani Volatmeter — returns (vol, anti)
+#[pyfunction]
+pub fn damiani_volatmeter(
+    candles: PyReadonlyArray2<f64>,
+    source: PyReadonlyArray1<f64>,
+    vis_atr: usize,
+    vis_std: usize,
+    sed_atr: usize,
+    sed_std: usize,
+    threshold: f64,
+) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    Python::with_gil(|py| {
+        let candles_array = candles.as_array();
+        let src: Vec<f64> = source.as_array().to_vec();
+        let n = candles_array.shape()[0];
+        let lag_s = 0.5f64;
+
+        let high: Vec<f64> = candles_array.slice(s![.., 3]).to_vec();
+        let low: Vec<f64> = candles_array.slice(s![.., 4]).to_vec();
+        let close: Vec<f64> = candles_array.slice(s![.., 2]).to_vec();
+
+        let atrvis = ih_atr_wilder(&high, &low, &close, vis_atr);
+        let atrsed = ih_atr_wilder(&high, &low, &close, sed_atr);
+
+        // u[i] = atrvis[i] / atrsed[i] for i >= sed_std
+        let mut u = vec![0.0f64; n];
+        for i in sed_std..n {
+            if atrsed[i] != 0.0 && !atrsed[i].is_nan() && !atrvis[i].is_nan() {
+                u[i] = atrvis[i] / atrsed[i];
+            }
+        }
+
+        // lfilter with b=[1.0], a=[1.0, -0.5, 0.0, 0.5]:
+        //   y[i] = u[i] + 0.5*y[i-1] - 0.5*y[i-3]
+        let mut vol = vec![0.0f64; n];
+        for i in 0..n {
+            let mut y = u[i];
+            if i >= 1 { y += lag_s * vol[i - 1]; }
+            if i >= 3 { y -= lag_s * vol[i - 3]; }
+            vol[i] = y;
+        }
+
+        // Rolling std and threshold calculation
+        let mut t = vec![0.0f64; n];
+        if n >= sed_std {
+            let std_vis = rolling_std_pop(&src, vis_std);
+            let std_sed = rolling_std_pop(&src, sed_std);
+            for idx in sed_std..n {
+                let v = std_vis[idx - 1];
+                let s = std_sed[idx - 1];
+                t[idx] = threshold - v / s;
+            }
+        }
+
+        Ok((
+            PyArray1::from_vec(py, vol).to_owned(),
+            PyArray1::from_vec(py, t).to_owned(),
+        ))
+    })
+}
+
+/// Find index of a row in a 2D array that matches the given 1D array exactly.
+/// Returns -1 if no match. Mirrors np.all(orders[i] == order_array) used by FuturesExchange.
+#[pyfunction]
+pub fn find_order_index(
+    orders: PyReadonlyArray2<f64>,
+    order_array: PyReadonlyArray1<f64>,
+) -> PyResult<i64> {
+    let orders = orders.as_array();
+    let target = order_array.as_array();
+    let n_rows = orders.shape()[0];
+    let n_cols = orders.shape()[1];
+    if target.len() != n_cols { return Ok(-1); }
+    'outer: for i in 0..n_rows {
+        for j in 0..n_cols {
+            if orders[[i, j]] != target[j] { continue 'outer; }
+        }
+        return Ok(i as i64);
+    }
+    Ok(-1)
 }
