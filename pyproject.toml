@@ -46,7 +46,6 @@ dependencies = [
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "jesse_rust"
-python-source = "."
 
 [tool.cibuildwheel]
 # Build for common Python versions and platforms
