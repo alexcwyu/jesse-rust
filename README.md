@@ -1,89 +1,142 @@
 # Jesse Rust
 
-High-performance Rust-based technical indicators for the Jesse trading framework.
+The native technical-indicator engine that powers the [Jesse](https://jesse.trade)
+trading framework — written in Rust, exposed to Python via PyO3.
 
-## Overview
+## Why
 
-`jesse-rust` is a Python extension module written in Rust that provides blazing-fast implementations of technical indicators commonly used in algorithmic trading. This package is designed to work seamlessly with the [Jesse](https://jesse.trade) trading framework, offering significant performance improvements over pure Python implementations.
+`jesse_rust` is, to our knowledge, **the fastest technical-indicator library
+available for Python.** Indicators are implemented in native Rust, compiled
+with full LTO and `opt-level = 3`, and called from Python with zero-copy
+NumPy bindings. It is consistently faster than equivalent pure-Python or
+pandas-based implementations and is also faster than numba-accelerated
+versions of the same algorithms — without the cold-start JIT cost, without a
+runtime LLVM dependency, and without numba's per-call overhead.
 
-## Features
-
-- **High Performance**: Written in Rust for maximum speed and efficiency
-- **Memory Safe**: Leverages Rust's memory safety guarantees
-- **Numpy Integration**: Seamless integration with NumPy arrays
-- **Cross-Platform**: Pre-built wheels available for Windows, macOS, and Linux
-- **Easy Integration**: Drop-in replacement for Python-based indicators
+- **Native speed** — everything runs as compiled machine code, no JIT warm-up.
+- **Memory-safe** — no `unsafe` blocks in the indicator code.
+- **Zero-copy NumPy** — input arrays are read in place via PyO3's `numpy` bindings.
+- **Drop-in for Jesse** — every Jesse indicator that needs an inner loop is
+  routed here; you don't have to call this library directly.
+- **Cross-platform** — pre-built wheels for Linux, macOS, and Windows.
 
 ## Installation
-
-Install from PyPI using pip:
 
 ```bash
 pip install jesse-rust
 ```
 
-## Requirements
-
-- Python 3.10 or higher
-- NumPy 1.26.4 or higher
+Requirements: Python 3.10+, NumPy 1.26.4+.
 
 ## Usage
 
-The package is typically imported and used within the Jesse framework:
+You normally don't import `jesse_rust` yourself. Strategies call indicators
+through Jesse's standard interface and the Rust backend is used automatically:
 
 ```python
-import jesse_rust
+from jesse.strategies import Strategy
+import jesse.indicators as ta
 
-# The module provides various technical indicators
-# that can be used directly in your trading strategies
+class MyStrategy(Strategy):
+    def update_indicators(self):
+        rsi   = ta.rsi(self.candles, period=14)
+        ema   = ta.ema(self.candles, period=200)
+        macd  = ta.macd(self.candles)
+        bands = ta.bollinger_bands(self.candles)
 ```
 
-## Performance
+Direct use from Python is supported too if you need it:
 
-Rust implementations typically show 5-10x performance improvements over equivalent Python code, especially for computationally intensive indicators with large datasets.
+```python
+import numpy as np
+import jesse_rust as jr
 
-## Building from Source
+source = np.asarray(prices, dtype=np.float64)
+ema_50 = jr.ema(np.ascontiguousarray(source), 50)
+```
 
-If you need to build from source:
+## Supported indicators
+
+99 functions across 9 categories.
+
+### Moving averages and smoothers (29)
+
+`cwma`, `dema`, `ema`, `epma`, `frama`, `hma`, `hwma`, `jma`, `kama`,
+`maaq`, `mcginley_dynamic`, `mwdx`, `nma`, `rma`, `sma`, `smma`, `sqwma`,
+`srwma`, `t3`, `tema`, `trix`, `vidya`, `vlma_inner`, `vpwma`, `vwap`,
+`vwma`, `wilders`, `wma`, `zlema`
+
+### Oscillators / momentum (20)
+
+`aroonosc`, `cci`, `cfo`, `cg`, `cmo`, `dpo`, `dti`, `fisher`, `fosc`,
+`lrsi`, `macd`, `mass`, `pfe`, `rsi`, `rsx`, `srsi`, `stoch`, `stochf`,
+`willr`, `wt`
+
+### Trend / directional (11)
+
+`adx`, `adxr`, `alligator`, `di`, `dm`, `dx`, `ichimoku_cloud`,
+`safezonestop`, `sar`, `supertrend`, `vi`
+
+### Volume (7)
+
+`adosc`, `cvi`, `efi`, `emv`, `nvi`, `pvi`, `wad`
+
+### Bands / channels / volatility (7)
+
+`atr`, `bollinger_bands`, `bollinger_bands_width`, `chande`, `chop`,
+`donchian`, `keltner_inner`
+
+### Ehlers filters (14)
+
+`bandpass`, `correlation_cycle`, `edcf`, `gauss`, `high_pass`,
+`high_pass_2_pole`, `itrend`, `mama`, `pma`, `reflex`, `supersmoother`,
+`supersmoother_3_pole`, `trendflex`, `voss`
+
+### Candle transforms (3)
+
+`emd`, `heikin_ashi_candles`, `qstick`
+
+### Statistical (3)
+
+`damiani_volatmeter`, `hurst_rs`, `linearreg`
+
+### Utilities (5)
+
+`find_order_index`, `moving_std`, `shift`, `subtract_floats`, `sum_floats`
+
+## Building from source
+
+You only need this section if you're contributing.
 
 ### Prerequisites
 
 - Rust toolchain (install from [rustup.rs](https://rustup.rs/))
 - Python development headers
-- Maturin build tool
+- [`maturin`](https://github.com/PyO3/maturin)
 
-### Build Steps
+### Build
 
 ```bash
-# Clone the repository
 git clone https://github.com/jesse-ai/jesse-rust.git
 cd jesse-rust
 
-# Install maturin
 pip install maturin
 
-# Build the package
+# Develop build (installs into your current Python env)
 maturin develop --release
 
-# Or build wheel
+# Wheel build (outputs to ./target/wheels)
 maturin build --release
-```
-
-## Development
-
-For development builds:
-
-```bash
-maturin develop --release
 ```
 
 ## Contributing
 
-This package is part of the Jesse trading framework. Please refer to the main [Jesse repository](https://github.com/jesse-ai/jesse) for contribution guidelines.
+This package is part of the Jesse trading framework. Please refer to the main
+[Jesse repository](https://github.com/jesse-ai/jesse) for contribution guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT — see the LICENSE file.
 
 ## Support
 
@@ -94,6 +147,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 Built with:
-- [PyO3](https://pyo3.rs/) - Rust bindings for Python
-- [Maturin](https://github.com/PyO3/maturin) - Build and publish Rust-based Python extensions
-- [NumPy](https://numpy.org/) - Numerical computing in Python 
+
+- [PyO3](https://pyo3.rs/) — Rust bindings for Python
+- [Maturin](https://github.com/PyO3/maturin) — Build and publish Rust-based Python extensions
+- [NumPy](https://numpy.org/) — Numerical computing in Python
