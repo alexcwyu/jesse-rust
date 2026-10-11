@@ -9,19 +9,19 @@ use crate::helpers::{ih_ema};
 /// Calculate ADOSC (Chaikin A/D Oscillator) - Ultra-optimized version
 #[pyfunction]
 pub fn adosc(candles: PyReadonlyArray2<f64>, fast_period: usize, slow_period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         if n == 1 {
             result[0] = 0.0;
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract price and volume data
@@ -74,21 +74,21 @@ pub fn adosc(candles: PyReadonlyArray2<f64>, fast_period: usize, slow_period: us
             result[i] = fast_ema[i] - slow_ema[i];
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate CVI (Chaikins Volatility Indicator) - Ultra-optimized version
 #[pyfunction]
 pub fn cvi(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n <= period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract high and low price data
@@ -121,32 +121,32 @@ pub fn cvi(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// EFI — Elder's Force Index
 #[pyfunction]
 pub fn efi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let c = candles.as_array();
         let n = src.len();
-        if n < 2 { return Ok(PyArray1::from_vec(py, vec![f64::NAN; n]).to_owned()); }
+        if n < 2 { return Ok(PyArray1::from_vec(py, vec![f64::NAN; n]).unbind()); }
         let raw: Vec<f64> = (1..n).map(|i| (src[i] - src[i-1]) * c[[i,5]]).collect();
         let ema_vals = ih_ema(&raw, period);
         let mut r = vec![f64::NAN; n];
         if n > period {
             r[period..n].copy_from_slice(&ema_vals[(period - 1)..(n - 1)]);
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// EMV — Ease of Movement
 #[pyfunction]
 pub fn emv(candles: PyReadonlyArray2<f64>, length: usize, div: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut emv_raw = vec![0.0f64; n];
@@ -161,7 +161,7 @@ pub fn emv(candles: PyReadonlyArray2<f64>, length: usize, div: f64) -> PyResult<
         for i in (length-1)..n {
             r[i] = emv_raw[i+1-length..=i].iter().sum::<f64>() / length as f64;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
@@ -169,7 +169,7 @@ pub fn emv(candles: PyReadonlyArray2<f64>, length: usize, div: f64) -> PyResult<
 /// Note: uses candles[:,1] (open) as "close" per original code
 #[pyfunction]
 pub fn wad(candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut ad = vec![0.0f64; n];
@@ -185,14 +185,14 @@ pub fn wad(candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
         let mut r = vec![0.0f64; n];
         let mut cum = 0.0f64;
         for i in 0..n { cum += ad[i]; r[i] = cum; }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// NVI — Negative Volume Index
 #[pyfunction]
 pub fn nvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let c = candles.as_array();
         let n = src.len();
@@ -204,14 +204,14 @@ pub fn nvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyR
                 r[i] = r[i-1];
             }
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// PVI — Positive Volume Index
 #[pyfunction]
 pub fn pvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let c = candles.as_array();
         let n = src.len();
@@ -223,6 +223,6 @@ pub fn pvi(source: PyReadonlyArray1<f64>, candles: PyReadonlyArray2<f64>) -> PyR
                 r[i] = r[i-1];
             }
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }

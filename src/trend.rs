@@ -16,7 +16,7 @@ pub fn ichimoku_cloud(
     lagging_line_period: usize,
     displacement: usize
 ) -> PyResult<(f64, f64, f64, f64)> {
-    Python::with_gil(|_py| {
+    Python::attach(|_py| {
         let candles_array = candles.as_array();
         
         // Get the high and low price columns
@@ -66,14 +66,14 @@ pub fn ichimoku_cloud(
 /// Calculate ADX (Average Directional Index)
 #[pyfunction]
 pub fn adx(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
         let mut adx_result = Array1::<f64>::from_elem(n, f64::NAN);
 
         let required_len = 2 * period;
         if n <= required_len {
-            return Ok(PyArray1::from_array(py, &adx_result).to_owned());
+            return Ok(PyArray1::from_array(py, &adx_result).unbind());
         }
 
         let high = candles_array.slice(s![.., 3]);
@@ -148,14 +148,14 @@ pub fn adx(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray
             }
         }
 
-        Ok(PyArray1::from_array(py, &adx_result).to_owned())
+        Ok(PyArray1::from_array(py, &adx_result).unbind())
     })
 }
 
 /// Calculate Alligator indicator (Jaw, Teeth, Lips) - Optimized version
 #[pyfunction]
 pub fn alligator(source: PyReadonlyArray1<f64>) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -166,9 +166,9 @@ pub fn alligator(source: PyReadonlyArray1<f64>) -> PyArrTuple3 {
         
         if n < 13 {  // Need at least 13 periods for jaw (longest period)
             return Ok((
-                PyArray1::from_array(py, &jaw).to_owned(),
-                PyArray1::from_array(py, &teeth).to_owned(),
-                PyArray1::from_array(py, &lips).to_owned()
+                PyArray1::from_array(py, &jaw).unbind(),
+                PyArray1::from_array(py, &teeth).unbind(),
+                PyArray1::from_array(py, &lips).unbind()
             ));
         }
         
@@ -254,9 +254,9 @@ pub fn alligator(source: PyReadonlyArray1<f64>) -> PyArrTuple3 {
         }
         
         Ok((
-            PyArray1::from_array(py, &jaw).to_owned(),
-            PyArray1::from_array(py, &teeth).to_owned(),
-            PyArray1::from_array(py, &lips).to_owned()
+            PyArray1::from_array(py, &jaw).unbind(),
+            PyArray1::from_array(py, &teeth).unbind(),
+            PyArray1::from_array(py, &lips).unbind()
         ))
     })
 } 
@@ -264,7 +264,7 @@ pub fn alligator(source: PyReadonlyArray1<f64>) -> PyArrTuple3 {
 /// Calculate DI (Directional Indicator) - Optimized version
 #[pyfunction]
 pub fn di(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -274,8 +274,8 @@ pub fn di(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
         
         if n < 2 || n < period + 1 {
             return Ok((
-                PyArray1::from_array(py, &plus_di).to_owned(),
-                PyArray1::from_array(py, &minus_di).to_owned()
+                PyArray1::from_array(py, &plus_di).unbind(),
+                PyArray1::from_array(py, &minus_di).unbind()
             ));
         }
         
@@ -349,8 +349,8 @@ pub fn di(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
         }
         
         Ok((
-            PyArray1::from_array(py, &plus_di).to_owned(),
-            PyArray1::from_array(py, &minus_di).to_owned()
+            PyArray1::from_array(py, &plus_di).unbind(),
+            PyArray1::from_array(py, &minus_di).unbind()
         ))
     })
 }
@@ -358,7 +358,7 @@ pub fn di(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
 /// Calculate Directional Movement (DM) - Ultra-optimized version
 #[pyfunction]
 pub fn dm(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -367,8 +367,8 @@ pub fn dm(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
         
         if n <= period {
             return Ok((
-                PyArray1::from_array(py, &plus_dm).to_owned(),
-                PyArray1::from_array(py, &minus_dm).to_owned()
+                PyArray1::from_array(py, &plus_dm).unbind(),
+                PyArray1::from_array(py, &minus_dm).unbind()
             ));
         }
         
@@ -419,8 +419,8 @@ pub fn dm(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
         }
         
         Ok((
-            PyArray1::from_array(py, &plus_dm).to_owned(),
-            PyArray1::from_array(py, &minus_dm).to_owned()
+            PyArray1::from_array(py, &plus_dm).unbind(),
+            PyArray1::from_array(py, &minus_dm).unbind()
         ))
     })
 }
@@ -434,16 +434,16 @@ pub fn dx(
     adx_smoothing: usize,
     _sequential: bool,
 ) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
 
         if n == 0 {
             let empty = Array1::<f64>::from_elem(0, f64::NAN);
             return Ok((
-                PyArray1::from_array(py, &empty).to_owned(),
-                PyArray1::from_array(py, &empty).to_owned(),
-                PyArray1::from_array(py, &empty).to_owned(),
+                PyArray1::from_array(py, &empty).unbind(),
+                PyArray1::from_array(py, &empty).unbind(),
+                PyArray1::from_array(py, &empty).unbind(),
             ));
         }
 
@@ -506,9 +506,9 @@ pub fn dx(
         }
 
         Ok((
-            PyArray1::from_vec(py, adx).to_owned(),
-            PyArray1::from_vec(py, plus_di).to_owned(),
-            PyArray1::from_vec(py, minus_di).to_owned(),
+            PyArray1::from_vec(py, adx).unbind(),
+            PyArray1::from_vec(py, plus_di).unbind(),
+            PyArray1::from_vec(py, minus_di).unbind(),
         ))
     })
 }
@@ -520,7 +520,7 @@ pub fn vi(
     period: usize,
     sequential: bool
 ) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
         let mut vi_plus = Array1::<f64>::from_elem(n, f64::NAN);
@@ -528,8 +528,8 @@ pub fn vi(
         
         if n <= period {
             return Ok((
-                PyArray1::from_array(py, &vi_plus).to_owned(),
-                PyArray1::from_array(py, &vi_minus).to_owned()
+                PyArray1::from_array(py, &vi_plus).unbind(),
+                PyArray1::from_array(py, &vi_minus).unbind()
             ));
         }
         
@@ -574,15 +574,15 @@ pub fn vi(
         
         if sequential {
             Ok((
-                PyArray1::from_array(py, &vi_plus).to_owned(),
-                PyArray1::from_array(py, &vi_minus).to_owned()
+                PyArray1::from_array(py, &vi_plus).unbind(),
+                PyArray1::from_array(py, &vi_minus).unbind()
             ))
         } else {
             let plus_result = Array1::<f64>::from_elem(1, if n > 0 { vi_plus[n-1] } else { f64::NAN });
             let minus_result = Array1::<f64>::from_elem(1, if n > 0 { vi_minus[n-1] } else { f64::NAN });
             Ok((
-                PyArray1::from_array(py, &plus_result).to_owned(),
-                PyArray1::from_array(py, &minus_result).to_owned()
+                PyArray1::from_array(py, &plus_result).unbind(),
+                PyArray1::from_array(py, &minus_result).unbind()
             ))
         }
     })
@@ -591,7 +591,7 @@ pub fn vi(
 /// ADXR — Average Directional Movement Index Rating
 #[pyfunction]
 pub fn adxr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut tr = vec![0.0f64; n];
@@ -633,14 +633,14 @@ pub fn adxr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArra
                 result[i] = (adx_val[i] + adx_val[i-period]) / 2.0;
             }
         }
-        Ok(PyArray1::from_vec(py, result).to_owned())
+        Ok(PyArray1::from_vec(py, result).unbind())
     })
 }
 
 /// SuperTrend → (trend, changed)
 #[pyfunction]
 pub fn supertrend(candles: PyReadonlyArray2<f64>, period: usize, factor: f64) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let h: Vec<f64> = (0..n).map(|i| c[[i,3]]).collect();
@@ -687,8 +687,8 @@ pub fn supertrend(candles: PyReadonlyArray2<f64>, period: usize, factor: f64) ->
             }
         }
         Ok((
-            PyArray1::from_vec(py, trend).to_owned(),
-            PyArray1::from_vec(py, changed).to_owned(),
+            PyArray1::from_vec(py, trend).unbind(),
+            PyArray1::from_vec(py, changed).unbind(),
         ))
     })
 }
@@ -696,10 +696,10 @@ pub fn supertrend(candles: PyReadonlyArray2<f64>, period: usize, factor: f64) ->
 /// Parabolic SAR
 #[pyfunction]
 pub fn sar(candles: PyReadonlyArray2<f64>, acceleration: f64, maximum: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
-        if n == 0 { return Ok(PyArray1::from_vec(py, vec![]).to_owned()); }
+        if n == 0 { return Ok(PyArray1::from_vec(py, vec![]).unbind()); }
         let high: Vec<f64> = (0..n).map(|i| c[[i,3]]).collect();
         let low: Vec<f64> = (0..n).map(|i| c[[i,4]]).collect();
         let mut sar_v = vec![0.0f64; n];
@@ -731,14 +731,14 @@ pub fn sar(candles: PyReadonlyArray2<f64>, acceleration: f64, maximum: f64) -> P
             }
             sar_v[i] = sar_temp;
         }
-        Ok(PyArray1::from_vec(py, sar_v).to_owned())
+        Ok(PyArray1::from_vec(py, sar_v).unbind())
     })
 }
 
 /// SafeZone Stops
 #[pyfunction]
 pub fn safezonestop(candles: PyReadonlyArray2<f64>, period: usize, mult: f64, max_lookback: usize, direction: bool) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut diff_high = vec![0.0f64; n];
@@ -781,6 +781,6 @@ pub fn safezonestop(candles: PyReadonlyArray2<f64>, period: usize, mult: f64, ma
                 intermediate[start..=i].iter().cloned().fold(f64::INFINITY, f64::min)
             };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }

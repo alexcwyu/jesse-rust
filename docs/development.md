@@ -279,3 +279,33 @@ cargo audit
 - [architecture.md](architecture.md) — Component breakdown and dependency table
 - [workflow.md](workflow.md) — Build pipeline and data-flow diagrams
 - [state-management.md](state-management.md) — Internal rolling-state patterns
+
+## Maintained uv environment (2026-10-12)
+
+The tested interpreter selection is Python 3.15.0. uv 0.13.0 resolves runtime dependencies, optional extras, development groups, and build isolation. `uv.lock` records exact versions; `--upgrade` refreshes them within the project and compatibility constraints. Review [validation evidence](validation.md) before treating a build or test command as successful on this host.
+
+Python 3.15.0 builds the native extension after migrating to current PyO3 and NumPy ownership APIs. The coordinator crate and the Python extension are distinct native artifacts. Numerical integration tests reside in the sibling Jesse repository.
+
+### Layout and build ownership
+
+The native src/ modules and coordination/ crate remain in place. maturin uses the root Cargo manifest and locked native dependencies. The interpreter and Python development dependencies are recorded in .python-version and uv.lock.
+
+The native toolchain used for these checks is Rust 1.99.0 with Apple Command Line Tools. Make Cargo available with `export PATH=/opt/homebrew/opt/rustup/bin:$PATH`.
+
+### Commands from the repository root
+
+```sh
+uv python install 3.15.0
+uv lock --upgrade --python 3.15.0
+uv sync --all-groups --all-extras --python 3.15.0
+uv build
+cargo test --locked
+cargo test --manifest-path coordination/Cargo.toml --locked
+uv run --no-sync python -c "import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))"
+```
+
+### External inputs and test scope
+
+The Python extension requires Rust, maturin, PyO3, and matching NumPy Rust bindings. Jesse integration tests live in the sibling Jesse repository and exercise the exported functions through their real callers. This repository also contains the coordinator crate and its own tests. The maintenance changes binding ownership APIs without changing indicator algorithms.
+
+Existing upstream skips and xfails remain unchanged. Full suite failures, incomplete runs, and supplemental scoped checks are listed separately in validation. No new test cases were added. The architecture document links existing implementation files and explains the component contracts.

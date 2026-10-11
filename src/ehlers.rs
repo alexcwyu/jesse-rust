@@ -9,17 +9,17 @@ use crate::helpers::{ih_high_pass_1pole, ih_supersmoother_2pole};
 /// SuperSmoother 2-pole
 #[pyfunction]
 pub fn supersmoother(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let r = ih_supersmoother_2pole(&src, period as f64);
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// SuperSmoother 3-pole
 #[pyfunction]
 pub fn supersmoother_3_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let pi = std::f64::consts::PI;
@@ -33,24 +33,24 @@ pub fn supersmoother_3_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyR
                  + (-c - b * c) * r[i-2]
                  + c * c * r[i-3];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// High Pass 1-pole
 #[pyfunction]
 pub fn high_pass(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let r = ih_high_pass_1pole(&src, period as f64);
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// High Pass 2-pole
 #[pyfunction]
 pub fn high_pass_2_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let pi = std::f64::consts::PI;
@@ -67,14 +67,14 @@ pub fn high_pass_2_pole(source: PyReadonlyArray1<f64>, period: usize) -> PyResul
                  + 2.0 * (1.0 - alpha) * r[i-1]
                  - (1.0 - alpha).powi(2) * r[i-2];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Bandpass Filter → (bp, bp_normalized, signal, trigger)
 #[pyfunction]
 pub fn bandpass(source: PyReadonlyArray1<f64>, period: usize, bandwidth: f64) -> PyArrTuple4 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let n = src.len();
         let pi = std::f64::consts::PI;
@@ -101,10 +101,10 @@ pub fn bandpass(source: PyReadonlyArray1<f64>, period: usize, bandwidth: f64) ->
             if bp_norm[i] < trigger[i] { 1.0 } else if trigger[i] < bp_norm[i] { -1.0 } else { 0.0 }
         }).collect();
         Ok((
-            PyArray1::from_vec(py, bp).to_owned(),
-            PyArray1::from_vec(py, bp_norm).to_owned(),
-            PyArray1::from_vec(py, signal).to_owned(),
-            PyArray1::from_vec(py, trigger).to_owned(),
+            PyArray1::from_vec(py, bp).unbind(),
+            PyArray1::from_vec(py, bp_norm).unbind(),
+            PyArray1::from_vec(py, signal).unbind(),
+            PyArray1::from_vec(py, trigger).unbind(),
         ))
     })
 }
@@ -112,7 +112,7 @@ pub fn bandpass(source: PyReadonlyArray1<f64>, period: usize, bandwidth: f64) ->
 /// Gaussian Filter
 #[pyfunction]
 pub fn gauss(source: PyReadonlyArray1<f64>, period: usize, poles: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src_arr = source.as_array();
         let n_total = src_arr.len();
         let src: Vec<f64> = src_arr.iter().filter(|x| !x.is_nan()).cloned().collect();
@@ -141,14 +141,14 @@ pub fn gauss(source: PyReadonlyArray1<f64>, period: usize, poles: usize) -> PyRe
         for (k, &v) in fil_slice.iter().enumerate() {
             if start + k < n_total { r[start + k] = v; }
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Reflex indicator
 #[pyfunction]
 pub fn reflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let ssf = ih_supersmoother_2pole(&src, period as f64 / 2.0);
         let n = ssf.len();
@@ -166,14 +166,14 @@ pub fn reflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArr
             ms[i] = 0.04 * sums[i] * sums[i] + 0.96 * ms[i-1];
             if ms[i] > 0.0 { rf[i] = sums[i] / ms[i].sqrt(); }
         }
-        Ok(PyArray1::from_vec(py, rf).to_owned())
+        Ok(PyArray1::from_vec(py, rf).unbind())
     })
 }
 
 /// TrendFlex indicator
 #[pyfunction]
 pub fn trendflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let ssf = ih_supersmoother_2pole(&src, period as f64 / 2.0);
         let n = ssf.len();
@@ -188,14 +188,14 @@ pub fn trendflex(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<Py
             ms[i] = 0.04 * sums[i] * sums[i] + 0.96 * ms[i-1];
             if ms[i] != 0.0 { tf[i] = sums[i] / ms[i].sqrt(); }
         }
-        Ok(PyArray1::from_vec(py, tf).to_owned())
+        Ok(PyArray1::from_vec(py, tf).unbind())
     })
 }
 
 /// Instantaneous Trendline → (signal, it, trigger)
 #[pyfunction]
 pub fn itrend(source: PyReadonlyArray1<f64>, alpha: f64) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut it = src.to_vec();
@@ -217,9 +217,9 @@ pub fn itrend(source: PyReadonlyArray1<f64>, alpha: f64) -> PyArrTuple3 {
             signal[i] = if trigger[i] > it[i] { 1.0 } else if trigger[i] < it[i] { -1.0 } else { 0.0 };
         }
         Ok((
-            PyArray1::from_vec(py, signal).to_owned(),
-            PyArray1::from_vec(py, it).to_owned(),
-            PyArray1::from_vec(py, trigger).to_owned(),
+            PyArray1::from_vec(py, signal).unbind(),
+            PyArray1::from_vec(py, it).unbind(),
+            PyArray1::from_vec(py, trigger).unbind(),
         ))
     })
 }
@@ -227,7 +227,7 @@ pub fn itrend(source: PyReadonlyArray1<f64>, alpha: f64) -> PyArrTuple3 {
 /// Voss Predictive Filter → (voss, filt)
 #[pyfunction]
 pub fn voss(source: PyReadonlyArray1<f64>, period: usize, predict: usize, bandwidth: f64) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let pi = std::f64::consts::PI;
@@ -253,8 +253,8 @@ pub fn voss(source: PyReadonlyArray1<f64>, period: usize, predict: usize, bandwi
             }
         }
         Ok((
-            PyArray1::from_vec(py, voss_v).to_owned(),
-            PyArray1::from_vec(py, filt).to_owned(),
+            PyArray1::from_vec(py, voss_v).unbind(),
+            PyArray1::from_vec(py, filt).unbind(),
         ))
     })
 }
@@ -262,11 +262,11 @@ pub fn voss(source: PyReadonlyArray1<f64>, period: usize, predict: usize, bandwi
 /// EDCF — Ehlers Distance Coefficient Filter
 #[pyfunction]
 pub fn edcf(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if n < 2 * period || period < 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n < 2 * period || period < 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Precompute dist[k] = sum_{lb=1}^{period-1} (src[k] - src[k-lb])^2
         let mut dist = vec![0.0f64; n];
         for k in (period - 1)..n {
@@ -294,14 +294,14 @@ pub fn edcf(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray
             coef += dist[j];
             r[j] = if coef != 0.0 { num / coef } else { 0.0 };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Correlation Cycle → (real, imag, angle, state)
 #[pyfunction]
 pub fn correlation_cycle(source: PyReadonlyArray1<f64>, period: usize, threshold: f64) -> PyArrTuple4 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let pix2 = 4.0 * (1.0f64).asin();
@@ -375,10 +375,10 @@ pub fn correlation_cycle(source: PyReadonlyArray1<f64>, period: usize, threshold
             }
         }
         Ok((
-            PyArray1::from_vec(py, real_part).to_owned(),
-            PyArray1::from_vec(py, imag_part).to_owned(),
-            PyArray1::from_vec(py, angle).to_owned(),
-            PyArray1::from_vec(py, state).to_owned(),
+            PyArray1::from_vec(py, real_part).unbind(),
+            PyArray1::from_vec(py, imag_part).unbind(),
+            PyArray1::from_vec(py, angle).unbind(),
+            PyArray1::from_vec(py, state).unbind(),
         ))
     })
 }
@@ -386,7 +386,7 @@ pub fn correlation_cycle(source: PyReadonlyArray1<f64>, period: usize, threshold
 /// MAMA — MESA Adaptive Moving Average → (mama, fama)
 #[pyfunction]
 pub fn mama(source: PyReadonlyArray1<f64>, fastlimit: f64, slowlimit: f64) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let pi = std::f64::consts::PI;
@@ -438,8 +438,8 @@ pub fn mama(source: PyReadonlyArray1<f64>, fastlimit: f64, slowlimit: f64) -> Py
             fama_v[i] = 0.5*alpha_t*mama_v[i] + (1.0-0.5*alpha_t)*fama_v[i.saturating_sub(1)];
         }
         Ok((
-            PyArray1::from_vec(py, mama_v).to_owned(),
-            PyArray1::from_vec(py, fama_v).to_owned(),
+            PyArray1::from_vec(py, mama_v).unbind(),
+            PyArray1::from_vec(py, fama_v).unbind(),
         ))
     })
 }
@@ -447,7 +447,7 @@ pub fn mama(source: PyReadonlyArray1<f64>, fastlimit: f64, slowlimit: f64) -> Py
 /// PMA — Predictive Moving Average → (predict, trigger)
 #[pyfunction]
 pub fn pma(source: PyReadonlyArray1<f64>) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut predict = vec![f64::NAN; n];
@@ -467,8 +467,8 @@ pub fn pma(source: PyReadonlyArray1<f64>) -> PyArrTuple2 {
             }
         }
         Ok((
-            PyArray1::from_vec(py, predict).to_owned(),
-            PyArray1::from_vec(py, trigger).to_owned(),
+            PyArray1::from_vec(py, predict).unbind(),
+            PyArray1::from_vec(py, trigger).unbind(),
         ))
     })
 }

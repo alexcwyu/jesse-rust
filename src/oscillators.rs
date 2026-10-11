@@ -17,13 +17,13 @@ use crate::helpers::{
 /// Calculate RSI (Relative Strength Index)
 #[pyfunction]
 pub fn rsi(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
 
         if n <= period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         // Calculate initial sum of gains and losses
@@ -69,7 +69,7 @@ pub fn rsi(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             }
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
@@ -143,7 +143,7 @@ pub fn rsi_last(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<f64> {
 /// Calculate SRSI (Stochastic RSI) - Optimized version
 #[pyfunction]
 pub fn srsi(source: PyReadonlyArray1<f64>, period: usize, period_stoch: usize, k_period: usize, d_period: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -152,8 +152,8 @@ pub fn srsi(source: PyReadonlyArray1<f64>, period: usize, period_stoch: usize, k
         
         if n <= period {
             return Ok((
-                PyArray1::from_array(py, &k_values).to_owned(),
-                PyArray1::from_array(py, &d_values).to_owned()
+                PyArray1::from_array(py, &k_values).unbind(),
+                PyArray1::from_array(py, &d_values).unbind()
             ));
         }
 
@@ -263,8 +263,8 @@ pub fn srsi(source: PyReadonlyArray1<f64>, period: usize, period_stoch: usize, k
         }
         
         Ok((
-            PyArray1::from_array(py, &k_values).to_owned(),
-            PyArray1::from_array(py, &d_values).to_owned()
+            PyArray1::from_array(py, &k_values).unbind(),
+            PyArray1::from_array(py, &d_values).unbind()
         ))
     })
 }
@@ -272,7 +272,7 @@ pub fn srsi(source: PyReadonlyArray1<f64>, period: usize, period_stoch: usize, k
 /// Calculate MACD (Moving Average Convergence/Divergence)
 #[pyfunction]
 pub fn macd(source: PyReadonlyArray1<f64>, fast_period: usize, slow_period: usize, signal_period: usize) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -282,9 +282,9 @@ pub fn macd(source: PyReadonlyArray1<f64>, fast_period: usize, slow_period: usiz
 
         if n == 0 {
             return Ok((
-                PyArray1::from_array(py, &macd_line_result).to_owned(),
-                PyArray1::from_array(py, &signal_line_result).to_owned(),
-                PyArray1::from_array(py, &hist_result).to_owned(),
+                PyArray1::from_array(py, &macd_line_result).unbind(),
+                PyArray1::from_array(py, &signal_line_result).unbind(),
+                PyArray1::from_array(py, &hist_result).unbind(),
             ));
         }
 
@@ -321,9 +321,9 @@ pub fn macd(source: PyReadonlyArray1<f64>, fast_period: usize, slow_period: usiz
         }
 
         Ok((
-            PyArray1::from_array(py, &macd_line_result).to_owned(),
-            PyArray1::from_array(py, &signal_line_result).to_owned(),
-            PyArray1::from_array(py, &hist_result).to_owned(),
+            PyArray1::from_array(py, &macd_line_result).unbind(),
+            PyArray1::from_array(py, &signal_line_result).unbind(),
+            PyArray1::from_array(py, &hist_result).unbind(),
         ))
     })
 }
@@ -331,7 +331,7 @@ pub fn macd(source: PyReadonlyArray1<f64>, fast_period: usize, slow_period: usiz
 /// Calculate Williams' %R - Ultra-optimized version
 #[pyfunction]
 pub fn willr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -339,7 +339,7 @@ pub fn willr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArr
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract required data
@@ -444,14 +444,14 @@ pub fn willr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArr
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Stochastic Oscillator - Ultra-optimized version
 #[pyfunction]
 pub fn stoch(candles: PyReadonlyArray2<f64>, fastk_period: usize, slowk_period: usize, _slowk_matype: usize, slowd_period: usize, _slowd_matype: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -459,8 +459,8 @@ pub fn stoch(candles: PyReadonlyArray2<f64>, fastk_period: usize, slowk_period: 
             let k_values = Array1::<f64>::from_elem(n, f64::NAN);
             let d_values = Array1::<f64>::from_elem(n, f64::NAN);
             return Ok((
-                PyArray1::from_array(py, &k_values).to_owned(),
-                PyArray1::from_array(py, &d_values).to_owned()
+                PyArray1::from_array(py, &k_values).unbind(),
+                PyArray1::from_array(py, &d_values).unbind()
             ));
         }
         
@@ -503,8 +503,8 @@ pub fn stoch(candles: PyReadonlyArray2<f64>, fastk_period: usize, slowk_period: 
         let smoothed_d = sma_array(&smoothed_k, slowd_period);
         
         Ok((
-            PyArray1::from_array(py, &smoothed_k).to_owned(),
-            PyArray1::from_array(py, &smoothed_d).to_owned()
+            PyArray1::from_array(py, &smoothed_k).unbind(),
+            PyArray1::from_array(py, &smoothed_d).unbind()
         ))
     })
 }
@@ -512,7 +512,7 @@ pub fn stoch(candles: PyReadonlyArray2<f64>, fastk_period: usize, slowk_period: 
 /// Calculate Stochastic Fast - Ultra-optimized version
 #[pyfunction]
 pub fn stochf(candles: PyReadonlyArray2<f64>, fastk_period: usize, fastd_period: usize, fastd_matype: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -521,8 +521,8 @@ pub fn stochf(candles: PyReadonlyArray2<f64>, fastk_period: usize, fastd_period:
         
         if n < fastk_period {
             return Ok((
-                PyArray1::from_array(py, &k_values).to_owned(),
-                PyArray1::from_array(py, &d_values).to_owned()
+                PyArray1::from_array(py, &k_values).unbind(),
+                PyArray1::from_array(py, &d_values).unbind()
             ));
         }
         
@@ -636,8 +636,8 @@ pub fn stochf(candles: PyReadonlyArray2<f64>, fastk_period: usize, fastd_period:
         d_values = smoothed_d;
         
         Ok((
-            PyArray1::from_array(py, &k_values).to_owned(),
-            PyArray1::from_array(py, &d_values).to_owned()
+            PyArray1::from_array(py, &k_values).unbind(),
+            PyArray1::from_array(py, &d_values).unbind()
         ))
     })
 }
@@ -645,14 +645,14 @@ pub fn stochf(candles: PyReadonlyArray2<f64>, fastk_period: usize, fastd_period:
 /// Calculate DTI (Dynamic Trend Index) by William Blau - Optimized version
 #[pyfunction]
 pub fn dti(candles: PyReadonlyArray2<f64>, r: usize, s: usize, u: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n <= r || n <= s || n <= u {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract high and low price data
@@ -758,7 +758,7 @@ pub fn dti(candles: PyReadonlyArray2<f64>, r: usize, s: usize, u: usize) -> PyRe
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
@@ -773,7 +773,7 @@ pub fn wt(
     oslevel: f64,
     source_type: &str
 ) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<bool>>, Py<PyArray1<bool>>, Py<PyArray1<bool>>, Py<PyArray1<bool>>, Py<PyArray1<f64>>)> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         // Extract data from candles based on source_type
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
@@ -867,13 +867,13 @@ pub fn wt(
         }
         
         Ok((
-            PyArray1::from_array(py, &wt1).to_owned(),
-            PyArray1::from_array(py, &wt2).to_owned(),
-            PyArray1::from_array(py, &wtcrossup).to_owned(),
-            PyArray1::from_array(py, &wtcrossdown).to_owned(),
-            PyArray1::from_array(py, &wtoversold).to_owned(),
-            PyArray1::from_array(py, &wtoverbought).to_owned(),
-            PyArray1::from_array(py, &wtvwap).to_owned()
+            PyArray1::from_array(py, &wt1).unbind(),
+            PyArray1::from_array(py, &wt2).unbind(),
+            PyArray1::from_array(py, &wtcrossup).unbind(),
+            PyArray1::from_array(py, &wtcrossdown).unbind(),
+            PyArray1::from_array(py, &wtoversold).unbind(),
+            PyArray1::from_array(py, &wtoverbought).unbind(),
+            PyArray1::from_array(py, &wtvwap).unbind()
         ))
     })
 }
@@ -884,13 +884,13 @@ pub fn fosc(
     source: PyReadonlyArray1<f64>,
     period: usize,
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source = source.as_array();
         let n = source.len();
         let mut result = Array1::<f64>::from_elem(n, 0.0);
 
         if n < period || period == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         let period_f64 = period as f64;
@@ -924,14 +924,14 @@ pub fn fosc(
             let actual = source[end];
             result[end] = if actual != 0.0 { 100.0*(actual-predicted)/actual } else { 0.0 };
         }
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// DPO — Detrended Price Oscillator
 #[pyfunction]
 pub fn dpo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let shift = period / 2 + 1;
@@ -943,14 +943,14 @@ pub fn dpo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
                 r[i] = src[i - shift] - sma_vals[i];
             }
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// CCI — Commodity Channel Index
 #[pyfunction]
 pub fn cci(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let tp: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]] + c[[i,2]]) / 3.0).collect();
@@ -961,18 +961,18 @@ pub fn cci(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray
             let md: f64 = tp[start..=i].iter().map(|&x| (x - sma).abs()).sum::<f64>() / period as f64;
             r[i] = if md == 0.0 { 0.0 } else { (tp[i] - sma) / (0.015 * md) };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// CMO — Chande Momentum Oscillator
 #[pyfunction]
 pub fn cmo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if n <= period || period == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n <= period || period == 0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Pre-split diffs into positive and negative magnitudes
         let mut pos_arr = vec![0.0f64; n - 1];
         let mut neg_arr = vec![0.0f64; n - 1];
@@ -993,18 +993,18 @@ pub fn cmo(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             let denom = pos + neg;
             r[i] = if denom == 0.0 { 0.0 } else { 100.0 * (pos - neg) / denom };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// CFO — Chande Forecast Oscillator
 #[pyfunction]
 pub fn cfo(source: PyReadonlyArray1<f64>, period: usize, scalar: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let pf = period as f64;
         let sx: f64 = (0..period).map(|j| j as f64).sum();
         let sxx: f64 = (0..period).map(|j| (j as f64).powi(2)).sum();
@@ -1031,18 +1031,18 @@ pub fn cfo(source: PyReadonlyArray1<f64>, period: usize, scalar: f64) -> PyResul
             let reg_val = intercept + slope * (pf - 1.0);
             r[i] = if src[i] != 0.0 { scalar * (src[i] - reg_val) / src[i] } else { f64::NAN };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// CG — Center of Gravity
 #[pyfunction]
 pub fn cg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if period < 2 || n <= period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 || n <= period { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Window of length (period - 1) ending at i, i.e. k in [i - period + 2, i].
         //   denom    = Σ src[k]
         //   numer    = Σ (1 + i - k) · src[k] = (1 + i) · denom - Σ k · src[k]
@@ -1062,14 +1062,14 @@ pub fn cg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<
             let num = (1.0 + i as f64) * denom - sum_kx;
             r[i] = if denom != 0.0 { -num / denom } else { 0.0 };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Aroon Oscillator
 #[pyfunction]
 pub fn aroonosc(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut r = vec![f64::NAN; n];
@@ -1085,14 +1085,14 @@ pub fn aroonosc(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<Py
             }
             r[i] = 100.0 * (best_idx as f64 - worst_idx as f64) / period as f64;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// MASS — Mass Index
 #[pyfunction]
 pub fn mass(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let hl: Vec<f64> = (0..n).map(|i| c[[i,3]] - c[[i,4]]).collect();
@@ -1103,14 +1103,14 @@ pub fn mass(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArra
         for i in (period-1)..n {
             r[i] = ratio[i+1-period..=i].iter().sum();
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// PFE — Polarized Fractal Efficiency
 #[pyfunction]
 pub fn pfe(source: PyReadonlyArray1<f64>, period: usize, smoothing: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let n = src.len();
         let ln = period - 1; // lookback = period - 1
@@ -1167,14 +1167,14 @@ pub fn pfe(source: PyReadonlyArray1<f64>, period: usize, smoothing: usize) -> Py
 
         let signed: Vec<f64> = sign.iter().zip(pfetmp.iter()).map(|(s, p)| s * p).collect();
         let r = ih_ema(&signed, smoothing);
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Laguerre RSI
 #[pyfunction]
 pub fn lrsi(candles: PyReadonlyArray2<f64>, alpha: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let price: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
@@ -1194,14 +1194,14 @@ pub fn lrsi(candles: PyReadonlyArray2<f64>, alpha: f64) -> PyResult<Py<PyArray1<
             if l2 >= l3 { cu += l2 - l3; } else { cd += l3 - l2; }
             r[i] = if cu + cd == 0.0 { 0.0 } else { cu / (cu + cd) };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// RSX — Relative Strength Xtra
 #[pyfunction]
 pub fn rsx(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
@@ -1253,14 +1253,14 @@ pub fn rsx(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
                 ((v14 / v20 + 1.0) * 50.0).clamp(0.0, 100.0)
             } else { 50.0 };
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Fisher Transform → (fisher, signal)
 #[pyfunction]
 pub fn fisher(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mid: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
@@ -1279,8 +1279,8 @@ pub fn fisher(candles: PyReadonlyArray2<f64>, period: usize) -> PyArrTuple2 {
             value1 = value0;
         }
         Ok((
-            PyArray1::from_vec(py, fisher_v).to_owned(),
-            PyArray1::from_vec(py, fisher_sig).to_owned(),
+            PyArray1::from_vec(py, fisher_v).unbind(),
+            PyArray1::from_vec(py, fisher_sig).unbind(),
         ))
     })
 }

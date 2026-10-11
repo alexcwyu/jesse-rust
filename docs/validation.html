@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validation evidence</title><style>
+:root{color-scheme:light dark;--bg:#f6f8fa;--paper:#fff;--fg:#182332;--muted:#526274;--line:#d9e0e7;--accent:#1769aa}
+@media(prefers-color-scheme:dark){:root{--bg:#111820;--paper:#192330;--fg:#e6edf3;--muted:#a0b3c5;--line:#344354;--accent:#71b7ee}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,sans-serif}
+header{border-bottom:1px solid var(--line);padding:16px max(24px,calc((100vw - 1120px)/2));background:var(--paper);font-size:14px}
+main{max-width:1120px;margin:32px auto;padding:40px 48px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:24px}h1{font-size:2.1rem}h2{margin-top:2.5em;border-bottom:1px solid var(--line);padding-bottom:.35em}h3{margin-top:1.8em}
+a{color:var(--accent);text-underline-offset:3px}code{font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border-radius:4px;padding:2px 5px}pre{overflow:auto;border:1px solid var(--line);background:var(--bg);padding:16px;border-radius:7px}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;display:block;overflow-x:auto;font-size:14px}th,td{border:1px solid var(--line);padding:9px 12px;text-align:left}th{background:var(--bg)}blockquote{border-left:4px solid var(--accent);margin:16px 0;padding:4px 20px;color:var(--muted)}
+.diagram{overflow-x:auto;margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#182332}.mermaid{border:0;background:none;text-align:center}.mermaid svg{height:auto;max-width:100%}details{font-size:13px;color:#526274}.headerlink{margin-left:.4em;font-size:.7em;text-decoration:none;color:var(--muted)}
+main{min-width:0;overflow-wrap:anywhere}table,pre{max-width:100%}.diagram svg{display:block}
+th,td{min-width:120px;overflow-wrap:normal}
+@media(max-width:740px){main{margin:0;padding:24px 18px;border:0;border-radius:0}h1{font-size:1.7rem}.diagram{padding:8px}}
+@media print{header,details,.headerlink{display:none}body,main{background:#fff;color:#000;border:0;margin:0;padding:0}a{color:#000}.diagram,pre{break-inside:avoid}}
+</style></head><body><header>Engineering documentation · <a href="validation.md">Markdown source</a></header><main><h1 id="validation-evidence">Validation evidence<a class="headerlink" href="#validation-evidence" title="Permanent link">&para;</a></h1>
+<p>Recorded 2026-10-12 on macOS arm64. Selected Python: <strong>3.15.0</strong>; uv0.13.0; native Cargo/Rust1.99.0. Commands below ran from the repository root. Exit124 means the documented time bound expired; exit139 means a native segmentation fault. An earlier failed attempt is retained even if a later rerun succeeds.</p>
+<h2 id="current-scope-and-result">Current scope and result<a class="headerlink" href="#current-scope-and-result" title="Permanent link">&para;</a></h2>
+<p>Release CPython3.15 wheel and source distribution build successfully. Native indicator crate has0unit tests; coordinator crate has3passing tests. EMA calculation and coordinator export were checked through the built extension. The sibling Jesse complete suite consumes this local source on Python3.14.8:1970passed,18existing skips (jesse-tests-4.log). No native numerical or binding mismatch was observed.</p>
+<p>Current recorded status: <strong>complete</strong>. Interpreter fallback evidence and native prerequisites are described in <a href="development.md">development</a>. See <a href="ayu-develop.md">architecture</a> for workflows, components, and existing source links.</p>
+<h2 id="executed-commands">Executed commands<a class="headerlink" href="#executed-commands" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Exact command</th>
+<th style="text-align: right;">Exit</th>
+<th style="text-align: right;">Elapsed seconds</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>python-sync</td>
+<td><code>uv sync --all-groups --all-extras --python 3.15</code></td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">8.43</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-python-sync.log">jesse-rust-python-sync.log</a></td>
+</tr>
+<tr>
+<td>cargo-update</td>
+<td><code>cargo update</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6.03</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-cargo-update.log">jesse-rust-cargo-update.log</a></td>
+</tr>
+<tr>
+<td>python315-modern-sync</td>
+<td><code>uv sync --all-groups --all-extras --python 3.15</code></td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">44.2</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-python315-modern-sync.log">jesse-rust-python315-modern-sync.log</a></td>
+</tr>
+<tr>
+<td>python315-fixed-sync</td>
+<td><code>uv sync --all-groups --all-extras --python 3.15</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">64.92</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-python315-fixed-sync.log">jesse-rust-python315-fixed-sync.log</a></td>
+</tr>
+<tr>
+<td>cargo-coordinator-tests</td>
+<td><code>cargo test --manifest-path coordination/Cargo.toml</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">13.04</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-cargo-coordinator-tests.log">jesse-rust-cargo-coordinator-tests.log</a></td>
+</tr>
+<tr>
+<td>build</td>
+<td><code>uv build</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">47.24</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-build.log">jesse-rust-build.log</a></td>
+</tr>
+<tr>
+<td>native-import</td>
+<td><code>uv run --no-sync python -c 'import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))'</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.35</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-native-import.log">jesse-rust-native-import.log</a></td>
+</tr>
+<tr>
+<td>cargo-tests</td>
+<td><code>cargo test</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">19.78</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-cargo-tests.log">jesse-rust-cargo-tests.log</a></td>
+</tr>
+<tr>
+<td>build-current-metadata</td>
+<td><code>uv build</code></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">34.67</td>
+<td><a href="../../docs/maintenance-2026-10-12/jesse-rust-build-current-metadata.log">jesse-rust-build-current-metadata.log</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="test-summaries-and-failures">Test summaries and failures<a class="headerlink" href="#test-summaries-and-failures" title="Permanent link">&para;</a></h2>
+<h3 id="cargo-coordinator-tests">cargo-coordinator-tests<a class="headerlink" href="#cargo-coordinator-tests" title="Permanent link">&para;</a></h3>
+<p>Exit 0; elapsed 13.04seconds.</p>
+<pre><code class="language-text">test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+</code></pre>
+<h3 id="native-import">native-import<a class="headerlink" href="#native-import" title="Permanent link">&para;</a></h3>
+<p>Exit 0; elapsed 0.35seconds.</p>
+<pre><code class="language-text">$ uv run --no-sync python -c import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))
+[1.         1.66666667 2.55555556 3.51851852]
+True
+</code></pre>
+<h3 id="cargo-tests">cargo-tests<a class="headerlink" href="#cargo-tests" title="Permanent link">&para;</a></h3>
+<p>Exit 0; elapsed 19.78seconds.</p>
+<pre><code class="language-text">test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+</code></pre>
+<h2 id="synchronization">Synchronization<a class="headerlink" href="#synchronization" title="Permanent link">&para;</a></h2>
+<p>All upstream branch and tag refs were fetched by the workspace synchronization procedure. Fork updates use non-forcing pushes; upstream tags also have a private local namespace to preserve divergent tags. The default branch was merged into feature/ayu_develop, preserving the modern package layout and upstream source changes. The workspace synchronization JSON and log retain per-ref outcomes and merge history. This document does not claim that any feature branch was pushed.</p></main>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.esm.min.mjs';
+mermaid.initialize({startOnLoad:true,securityLevel:'strict',theme:'default',flowchart:{useMaxWidth:true},sequence:{useMaxWidth:true}});
+</script></body></html>

@@ -10,7 +10,7 @@ use crate::helpers::{get_period_from_timestamp, ih_ema, ih_wma};
 /// Calculate KAMA (Kaufman Adaptive Moving Average) - Optimized version
 #[pyfunction]
 pub fn kama(source: PyReadonlyArray1<f64>, period: usize, fast_length: usize, slow_length: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -21,7 +21,7 @@ pub fn kama(source: PyReadonlyArray1<f64>, period: usize, fast_length: usize, sl
             for i in 0..n {
                 result[i] = source_array[i];
             }
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Calculate the efficiency ratio multiplier
@@ -69,20 +69,20 @@ pub fn kama(source: PyReadonlyArray1<f64>, period: usize, fast_length: usize, sl
             result[i] = result[i - 1] + sc * (source_array[i] - result[i - 1]);
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate TEMA (Triple Exponential Moving Average)
 #[pyfunction]
 pub fn tema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::zeros(n);
 
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         let alpha = 2.0 / (period as f64 + 1.0);
@@ -99,20 +99,20 @@ pub fn tema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray
             result[i] = 3.0 * ema1 - 3.0 * ema2 + ema3;
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Simple Moving Average (SMA)
 #[pyfunction]
 pub fn sma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
 
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         // Calculate first SMA value
@@ -143,14 +143,14 @@ pub fn sma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             }
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate SMMA (Smoothed Moving Average)
 #[pyfunction]
 pub fn smma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         // Convert PyArray to rust ndarray
         let source_array = source.as_array();
         let n = source_array.len();
@@ -163,7 +163,7 @@ pub fn smma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray
             for i in 0..n {
                 result[i] = f64::NAN;
             }
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Calculate first SMMA value (SMA)
@@ -187,14 +187,14 @@ pub fn smma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray
             result[i] = f64::NAN;
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Weighted Moving Average - Ultra-optimized version
 #[pyfunction]
 pub fn wma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -202,7 +202,7 @@ pub fn wma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n < period || period == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Pre-calculate weight sum for efficiency
@@ -226,14 +226,14 @@ pub fn wma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             result[i] = weighted_sum / weight_sum_f64;
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Volume Weighted Moving Average - Ultra-optimized version
 #[pyfunction]
 pub fn vwma(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -241,7 +241,7 @@ pub fn vwma(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArra
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract required data
@@ -290,26 +290,26 @@ pub fn vwma(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArra
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate DEMA (Double Exponential Moving Average) - Ultra-optimized version
 #[pyfunction]
 pub fn dema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         if n == 1 {
             result[0] = source_array[0];
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         let alpha = 2.0 / (period as f64 + 1.0);
@@ -341,31 +341,31 @@ pub fn dema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray
             result[i] = two * ema1[i] - ema2[i];
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate EMA (Exponential Moving Average) - Optimized version
 #[pyfunction]
 pub fn ema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Return NaN if period is greater than the data length
         if period > n {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         if n == 1 {
             result[0] = source_array[0];
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         let alpha = 2.0 / (period as f64 + 1.0);
@@ -379,7 +379,7 @@ pub fn ema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             result[i] = alpha * source_array[i] + one_minus_alpha * result[i - 1];
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
@@ -493,14 +493,14 @@ pub fn sma_last(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<f64> {
 /// Calculate ZLEMA (Zero-Lag Exponential Moving Average)
 #[pyfunction]
 pub fn zlema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         // Return early if we don't have enough data
         if n <= period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Calculate lag
@@ -523,7 +523,7 @@ pub fn zlema(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArra
             result[i] = alpha * ema_data[i] + (1.0 - alpha) * result[i - 1];
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
@@ -535,7 +535,7 @@ pub fn frama(
     fc: usize,
     sc: usize,
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
         let mut result = vec![f64::NAN; n];
@@ -543,7 +543,7 @@ pub fn frama(
         // Adjust window to be even if it's not
         let mut n_local = window;
         if n_local % 2 == 1 { n_local += 1; }
-        if n < n_local { return Ok(PyArray1::from_vec(py, result).to_owned()); }
+        if n < n_local { return Ok(PyArray1::from_vec(py, result).unbind()); }
 
         // Extract high/low/close to plain Vec<f64> for fast indexing
         let high: Vec<f64> = candles_array.slice(s![.., 3]).to_vec();
@@ -609,7 +609,7 @@ pub fn frama(
             result[i] = alphas[i] * close[i] + (1.0 - alphas[i]) * result[i - 1];
         }
 
-        Ok(PyArray1::from_vec(py, result).to_owned())
+        Ok(PyArray1::from_vec(py, result).unbind())
     })
 }
 
@@ -621,13 +621,13 @@ pub fn vwap(
     anchor: &str,
     sequential: bool
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n == 0 {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract source prices and volumes based on source_type
@@ -691,10 +691,10 @@ pub fn vwap(
         }
         
         if sequential {
-            Ok(PyArray1::from_array(py, &result).to_owned())
+            Ok(PyArray1::from_array(py, &result).unbind())
         } else {
             let last_result = Array1::<f64>::from_elem(1, if n > 0 { result[n-1] } else { f64::NAN });
-            Ok(PyArray1::from_array(py, &last_result).to_owned())
+            Ok(PyArray1::from_array(py, &last_result).unbind())
         }
     })
 }
@@ -708,13 +708,13 @@ pub fn t3(
     source_type: &str,
     sequential: bool
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.shape()[0];
         
         if n == 0 {
             let result = Array1::<f64>::from_elem(0, f64::NAN);
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract source based on source_type
@@ -785,10 +785,10 @@ pub fn t3(
         }
         
         if sequential {
-            Ok(PyArray1::from_array(py, &t3_result).to_owned())
+            Ok(PyArray1::from_array(py, &t3_result).unbind())
         } else {
             let last_result = Array1::<f64>::from_elem(1, if n > 0 { t3_result[n-1] } else { f64::NAN });
-            Ok(PyArray1::from_array(py, &last_result).to_owned())
+            Ok(PyArray1::from_array(py, &last_result).unbind())
         }
     })
 }
@@ -796,14 +796,14 @@ pub fn t3(
 /// Cubed Weighted Moving Average
 #[pyfunction]
 pub fn cwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powi(3)).collect();
         let ws: f64 = weights.iter().sum();
-        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_ws = 1.0 / ws;
         for j in (period + 1)..n {
             let mut s = 0.0f64;
@@ -812,21 +812,21 @@ pub fn cwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray
             }
             r[j] = s * inv_ws;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Squared Weighted Moving Average
 #[pyfunction]
 pub fn sqwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powi(2)).collect();
         let ws: f64 = weights.iter().sum();
-        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_ws = 1.0 / ws;
         for j in (period + 1)..n {
             let mut s = 0.0f64;
@@ -835,21 +835,21 @@ pub fn sqwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArra
             }
             r[j] = s * inv_ws;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Square Root Weighted Moving Average
 #[pyfunction]
 pub fn srwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).sqrt()).collect();
         let ws: f64 = weights.iter().sum();
-        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_ws = 1.0 / ws;
         for j in (period + 1)..n {
             let mut s = 0.0f64;
@@ -858,22 +858,22 @@ pub fn srwma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArra
             }
             r[j] = s * inv_ws;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Variable Power Weighted Moving Average
 #[pyfunction]
 pub fn vpwma(source: PyReadonlyArray1<f64>, period: usize, power: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Pre-compute weights once
         let weights: Vec<f64> = (0..(period - 1)).map(|i| (period as f64 - i as f64).powf(power)).collect();
         let ws: f64 = weights.iter().sum();
-        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_ws = 1.0 / ws;
         for j in (period + 1)..n {
             let mut s = 0.0f64;
@@ -882,25 +882,25 @@ pub fn vpwma(source: PyReadonlyArray1<f64>, period: usize, power: f64) -> PyResu
             }
             r[j] = s * inv_ws;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// End Point Moving Average
 #[pyfunction]
 pub fn epma(source: PyReadonlyArray1<f64>, period: usize, offset: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if period < 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let start = period + offset + 1;
-        if n <= start { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n <= start { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let weights: Vec<f64> = (0..(period - 1))
             .map(|i| (period as isize - i as isize - offset as isize) as f64)
             .collect();
         let ws: f64 = weights.iter().sum();
-        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if ws == 0.0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_ws = 1.0 / ws;
         for j in start..n {
             let mut s = 0.0f64;
@@ -909,14 +909,14 @@ pub fn epma(source: PyReadonlyArray1<f64>, period: usize, offset: usize) -> PyRe
             }
             r[j] = s * inv_ws;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// RMA — Wilder's EMA (alpha = 1/length)
 #[pyfunction]
 pub fn rma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let alpha = 1.0 / length as f64;
@@ -927,18 +927,18 @@ pub fn rma(source: PyReadonlyArray1<f64>, length: usize) -> PyResult<Py<PyArray1
         for i in 1..n {
             r[i] = alpha * src[i] + (1.0 - alpha) * r[i-1];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Wilders Smoothing (same as rma with period param)
 #[pyfunction]
 pub fn wilders(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r: Vec<f64> = src.to_vec();
-        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let pf = period as f64;
         let alpha = 1.0 / pf;
         let one_minus_alpha = 1.0 - alpha;
@@ -946,18 +946,18 @@ pub fn wilders(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyAr
         for i in 1..n {
             r[i] = alpha * src[i] + one_minus_alpha * r[i - 1];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// McGinley Dynamic
 #[pyfunction]
 pub fn mcginley_dynamic(source: PyReadonlyArray1<f64>, period: usize, k: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         r[0] = src[0];
         for i in 1..n {
             let prev = r[i-1];
@@ -965,14 +965,14 @@ pub fn mcginley_dynamic(source: PyReadonlyArray1<f64>, period: usize, k: f64) ->
             let denom = (k * period as f64 * ratio.powi(4)).max(1.0);
             r[i] = prev + (src[i] - prev) / denom;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// MWDX Average
 #[pyfunction]
 pub fn mwdx(source: PyReadonlyArray1<f64>, factor: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let val2 = 2.0 / factor - 1.0;
@@ -981,18 +981,18 @@ pub fn mwdx(source: PyReadonlyArray1<f64>, factor: f64) -> PyResult<Py<PyArray1<
         for i in 1..n {
             r[i] = fac * src[i] + (1.0 - fac) * r[i-1];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Holt-Winter Moving Average
 #[pyfunction]
 pub fn hwma(source: PyReadonlyArray1<f64>, na: f64, nb: f64, nc: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![0.0f64; n];
-        if n == 0 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n == 0 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let (mut last_a, mut last_v, mut last_f) = (0.0f64, 0.0f64, src[0]);
         for i in 0..n {
             let f = (1.0 - na) * (last_f + last_v + 0.5 * last_a) + na * src[i];
@@ -1001,14 +1001,14 @@ pub fn hwma(source: PyReadonlyArray1<f64>, na: f64, nb: f64, nc: f64) -> PyResul
             r[i] = f + v + 0.5 * a;
             last_a = a; last_f = f; last_v = v;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// TRIX — triple EMA of log(price), percent change * 10000
 #[pyfunction]
 pub fn trix(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let log_src: Vec<f64> = src.iter().map(|&x| x.ln()).collect();
@@ -1017,14 +1017,14 @@ pub fn trix(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray
         let e3 = ih_ema(&e2, period);
         let mut r = vec![f64::NAN; n];
         for i in 1..n { r[i] = (e3[i] - e3[i-1]) * 10000.0; }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// HMA — Hull Moving Average
 #[pyfunction]
 pub fn hma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src: Vec<f64> = source.as_array().to_vec();
         let n = src.len();
         let half = period / 2;
@@ -1033,14 +1033,14 @@ pub fn hma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
         let wma_full = ih_wma(&src, period);
         let raw: Vec<f64> = (0..n).map(|i| 2.0 * wma_half[i] - wma_full[i]).collect();
         let r = ih_wma(&raw, sq);
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// MAAQ — Moving Average Adaptive Q
 #[pyfunction]
 pub fn maaq(source: PyReadonlyArray1<f64>, period: usize, fast_period: usize, slow_period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let fast_sc = 2.0 / (fast_period as f64 + 1.0);
@@ -1048,7 +1048,7 @@ pub fn maaq(source: PyReadonlyArray1<f64>, period: usize, fast_period: usize, sl
         let mut diff = vec![0.0f64; n];
         for i in 1..n { diff[i] = (src[i] - src[i - 1]).abs(); }
         let mut r = src.to_vec();
-        if n <= period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n <= period { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Initial rolling-sum window [period+1-period..=period] = [1..=period]
         let mut noise: f64 = diff[1..=period].iter().sum();
         let i0 = period;
@@ -1064,14 +1064,14 @@ pub fn maaq(source: PyReadonlyArray1<f64>, period: usize, fast_period: usize, sl
             let temp = (ratio * fast_sc + slow_sc).powi(2);
             r[i] = r[i - 1] + temp * (src[i] - r[i - 1]);
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// VIDYA — Variable Index Dynamic Average
 #[pyfunction]
 pub fn vidya(source: PyReadonlyArray1<f64>, length: usize, fix_cmo: bool, select: bool) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let alpha = 2.0 / (length as f64 + 1.0);
@@ -1098,7 +1098,7 @@ pub fn vidya(source: PyReadonlyArray1<f64>, length: usize, fix_cmo: bool, select
             let eff_alpha = alpha * k_val;
             vidya_r[i] = eff_alpha * src[i] + (1.0 - eff_alpha) * vidya_r[i-1];
         }
-        Ok(PyArray1::from_vec(py, vidya_r).to_owned())
+        Ok(PyArray1::from_vec(py, vidya_r).unbind())
     })
 }
 
@@ -1113,7 +1113,7 @@ pub fn vlma_inner(
     min_period: usize,
     max_period: usize,
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let av = a.as_array();
         let bv = b.as_array();
@@ -1133,20 +1133,20 @@ pub fn vlma_inner(
             let sc = 2.0 / (period + 1.0);
             r[i] = src[i] * sc + (1.0 - sc) * r[i-1];
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// NMA — Natural Moving Average
 #[pyfunction]
 pub fn nma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let clipped: Vec<f64> = src.iter().map(|&x| x.max(1e-10)).collect();
         let ln: Vec<f64> = clipped.iter().map(|&x| x.ln() * 1000.0).collect();
         let mut r = vec![f64::NAN; n];
-        if period < 1 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period < 1 || n < period + 2 { return Ok(PyArray1::from_vec(py, r).unbind()); }
         // Precompute |ln[k] - ln[k-1]| for k >= 1
         let mut abs_diff = vec![0.0f64; n];
         for k in 1..n {
@@ -1166,14 +1166,14 @@ pub fn nma(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1
             let ratio = if den != 0.0 { num / den } else { 0.0 };
             r[j] = clipped[j - last_i] * ratio + clipped[j - last_i - 1] * (1.0 - ratio);
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// JMA — Jurik Moving Average
 #[pyfunction]
 pub fn jma(source: PyReadonlyArray1<f64>, period: usize, phase: f64, power: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let phase_ratio = if phase < -100.0 { 0.5 } else if phase > 100.0 { 2.5 } else { phase / 100.0 + 1.5 };
@@ -1189,6 +1189,6 @@ pub fn jma(source: PyReadonlyArray1<f64>, period: usize, phase: f64, power: usiz
             e2[i] = (e0[i] + phase_ratio * e1[i] - jma_v[i-1]) * (1.0 - alpha).powi(2) + alpha.powi(2) * e2[i-1];
             jma_v[i] = e2[i] + jma_v[i-1];
         }
-        Ok(PyArray1::from_vec(py, jma_v).to_owned())
+        Ok(PyArray1::from_vec(py, jma_v).unbind())
     })
 }

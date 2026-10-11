@@ -12,13 +12,13 @@ use crate::helpers::{ih_atr_wilder};
 /// Calculate Bollinger Bands Width - Optimized version
 #[pyfunction]
 pub fn bollinger_bands_width(source: PyReadonlyArray1<f64>, period: usize, mult: f64) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
 
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         // Use rolling window for efficient calculation
@@ -66,14 +66,14 @@ pub fn bollinger_bands_width(source: PyReadonlyArray1<f64>, period: usize, mult:
             }
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Bollinger Bands - Optimized version
 #[pyfunction]
 pub fn bollinger_bands(source: PyReadonlyArray1<f64>, period: usize, devup: f64, devdn: f64) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         
@@ -83,9 +83,9 @@ pub fn bollinger_bands(source: PyReadonlyArray1<f64>, period: usize, devup: f64,
 
         if n < period {
             return Ok((
-                PyArray1::from_array(py, &upper_band).to_owned(),
-                PyArray1::from_array(py, &middle_band).to_owned(),
-                PyArray1::from_array(py, &lower_band).to_owned()
+                PyArray1::from_array(py, &upper_band).unbind(),
+                PyArray1::from_array(py, &middle_band).unbind(),
+                PyArray1::from_array(py, &lower_band).unbind()
             ));
         }
 
@@ -130,9 +130,9 @@ pub fn bollinger_bands(source: PyReadonlyArray1<f64>, period: usize, devup: f64,
         }
 
         Ok((
-            PyArray1::from_array(py, &upper_band).to_owned(),
-            PyArray1::from_array(py, &middle_band).to_owned(),
-            PyArray1::from_array(py, &lower_band).to_owned()
+            PyArray1::from_array(py, &upper_band).unbind(),
+            PyArray1::from_array(py, &middle_band).unbind(),
+            PyArray1::from_array(py, &lower_band).unbind()
         ))
     })
 }
@@ -190,7 +190,7 @@ pub fn bollinger_bands_last(source: PyReadonlyArray1<f64>, period: usize, devup:
 /// Calculate CHOP (Choppiness Index) - Ultra-optimized version
 #[pyfunction]
 pub fn chop(candles: PyReadonlyArray2<f64>, period: usize, scalar: f64, drift: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -198,7 +198,7 @@ pub fn chop(candles: PyReadonlyArray2<f64>, period: usize, scalar: f64, drift: u
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract OHLCV data
@@ -329,14 +329,14 @@ pub fn chop(candles: PyReadonlyArray2<f64>, period: usize, scalar: f64, drift: u
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate ATR (Average True Range) - Ultra-optimized version
 #[pyfunction]
 pub fn atr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -344,7 +344,7 @@ pub fn atr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract OHLCV data
@@ -387,7 +387,7 @@ pub fn atr(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray
             result[i] = result[i - 1] + alpha * (tr - result[i - 1]);
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
@@ -455,7 +455,7 @@ pub fn chande(
     mult: f64, 
     direction: &str
 ) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -463,7 +463,7 @@ pub fn chande(
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
         
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
         
         // Extract OHLCV data
@@ -604,14 +604,14 @@ pub fn chande(
             }
         }
         
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate Donchian Channels - Ultra-optimized version
 #[pyfunction]
 pub fn donchian(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyDict>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let n = candles_array.nrows();
         
@@ -622,9 +622,9 @@ pub fn donchian(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<Py
         
         if n < period {
             let result = PyDict::new(py);
-            result.set_item("upperband", PyArray1::from_array(py, &upperband).to_owned())?;
-            result.set_item("middleband", PyArray1::from_array(py, &middleband).to_owned())?;
-            result.set_item("lowerband", PyArray1::from_array(py, &lowerband).to_owned())?;
+            result.set_item("upperband", PyArray1::from_array(py, &upperband).unbind())?;
+            result.set_item("middleband", PyArray1::from_array(py, &middleband).unbind())?;
+            result.set_item("lowerband", PyArray1::from_array(py, &lowerband).unbind())?;
             return Ok(result.into());
         }
         
@@ -725,9 +725,9 @@ pub fn donchian(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<Py
         
         // Return as dictionary
         let result = PyDict::new(py);
-        result.set_item("upperband", PyArray1::from_array(py, &upperband).to_owned())?;
-        result.set_item("middleband", PyArray1::from_array(py, &middleband).to_owned())?;
-        result.set_item("lowerband", PyArray1::from_array(py, &lowerband).to_owned())?;
+        result.set_item("upperband", PyArray1::from_array(py, &upperband).unbind())?;
+        result.set_item("middleband", PyArray1::from_array(py, &middleband).unbind())?;
+        result.set_item("lowerband", PyArray1::from_array(py, &lowerband).unbind())?;
         Ok(result.into())
     })
 }
@@ -742,7 +742,7 @@ pub fn keltner_inner(
     period: usize,
     multiplier: f64,
 ) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let ma = ma_values.as_array();
         let h = high.as_array();
         let l = low.as_array();
@@ -761,9 +761,9 @@ pub fn keltner_inner(
             }
         }
         Ok((
-            PyArray1::from_vec(py, upper).to_owned(),
-            PyArray1::from_vec(py, ma.to_vec()).to_owned(),
-            PyArray1::from_vec(py, lower).to_owned(),
+            PyArray1::from_vec(py, upper).unbind(),
+            PyArray1::from_vec(py, ma.to_vec()).unbind(),
+            PyArray1::from_vec(py, lower).unbind(),
         ))
     })
 }

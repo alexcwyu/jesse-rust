@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 /// Run shared state in a dedicated child; never block the dashboard process.
 #[pyfunction]
 fn run_coordinator(py: Python<'_>) -> PyResult<()> {
-    py.allow_threads(|| jesse_coordinator::run().map_err(|error| error.to_string()))
+    py.detach(|| jesse_coordinator::run().map_err(|error| error.to_string()))
         .map_err(PyRuntimeError::new_err)
 }
 
@@ -30,7 +30,7 @@ mod util;
 mod volume;
 
 #[pymodule]
-fn jesse_rust(_py: Python, m: &PyModule) -> PyResult<()> {
+fn jesse_rust(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run_coordinator, m)?)?;
     // ---- moving averages ----------------------------------------------------
     m.add_function(wrap_pyfunction!(moving_averages::cwma, m)?)?;

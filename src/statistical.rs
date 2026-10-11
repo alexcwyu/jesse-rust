@@ -10,11 +10,11 @@ use crate::helpers::{ih_atr_wilder, rolling_std_pop};
 /// Linear Regression Value
 #[pyfunction]
 pub fn linearreg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let src = source.as_array();
         let n = src.len();
         let mut r = vec![f64::NAN; n];
-        if n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if n < period { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let mean_x = (period as f64 - 1.0) / 2.0;
         let sxx: f64 = (0..period).map(|j| (j as f64 - mean_x).powi(2)).sum();
         for i in (period-1)..n {
@@ -23,14 +23,14 @@ pub fn linearreg(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<Py
             let sxy: f64 = win.iter().enumerate().map(|(j, &y)| (y - mean_y) * (j as f64 - mean_x)).sum();
             r[i] = mean_y + mean_x * (sxy / sxx);
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Hurst RS (R/S method for Hurst exponent)
 #[pyfunction]
 pub fn hurst_rs(x: PyReadonlyArray1<f64>, min_chunksize: usize, max_chunksize: usize, num_chunksize: usize) -> PyResult<f64> {
-    Python::with_gil(|_py| {
+    Python::attach(|_py| {
         let x_arr = x.as_array();
         let xv: Vec<f64> = x_arr.to_vec();
         let n = xv.len();
@@ -80,7 +80,7 @@ pub fn damiani_volatmeter(
     sed_std: usize,
     threshold: f64,
 ) -> PyArrTuple2 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let candles_array = candles.as_array();
         let src: Vec<f64> = source.as_array().to_vec();
         let n = candles_array.shape()[0];
@@ -124,8 +124,8 @@ pub fn damiani_volatmeter(
         }
 
         Ok((
-            PyArray1::from_vec(py, vol).to_owned(),
-            PyArray1::from_vec(py, t).to_owned(),
+            PyArray1::from_vec(py, vol).unbind(),
+            PyArray1::from_vec(py, t).unbind(),
         ))
     })
 }

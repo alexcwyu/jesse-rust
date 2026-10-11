@@ -93,7 +93,7 @@ fn np_pairwise_sum(a: &ArrayView1<f64>, start: usize, n: usize) -> f64 {
 /// 1..=4320, plus NaN, -0.0 and strided-row cases.
 #[pyfunction]
 pub fn candle_from_one_minutes(candles: PyReadonlyArray2<f64>) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.nrows();
         if n == 0 {
@@ -114,7 +114,7 @@ pub fn candle_from_one_minutes(candles: PyReadonlyArray2<f64>) -> PyResult<Py<Py
         let volume = np_pairwise_sum(&vol_col, 0, n);
 
         let out = vec![c[[0, 0]], c[[0, 1]], c[[n - 1, 2]], high, low, volume];
-        Ok(PyArray1::from_vec(py, out).to_owned())
+        Ok(PyArray1::from_vec(py, out).unbind())
     })
 }
 
@@ -154,11 +154,11 @@ pub fn fix_jumped_candles(mut candles: PyReadwriteArray2<f64>) -> PyResult<()> {
 /// QStick — SMA of (close - open)
 #[pyfunction]
 pub fn qstick(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut r = vec![0.0f64; n];
-        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).to_owned()); }
+        if period == 0 || n < period { return Ok(PyArray1::from_vec(py, r).unbind()); }
         let inv_p = 1.0 / period as f64;
         let mut sum: f64 = (0..period).map(|k| c[[k, 2]] - c[[k, 1]]).sum();
         r[period - 1] = sum * inv_p;
@@ -166,14 +166,14 @@ pub fn qstick(candles: PyReadonlyArray2<f64>, period: usize) -> PyResult<Py<PyAr
             sum += (c[[i, 2]] - c[[i, 1]]) - (c[[i - period, 2]] - c[[i - period, 1]]);
             r[i] = sum * inv_p;
         }
-        Ok(PyArray1::from_vec(py, r).to_owned())
+        Ok(PyArray1::from_vec(py, r).unbind())
     })
 }
 
 /// Heikin Ashi Candles → (open, close, high, low)
 #[pyfunction]
 pub fn heikin_ashi_candles(candles: PyReadonlyArray2<f64>) -> PyArrTuple4 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let mut ha_open = vec![f64::NAN; n];
@@ -187,10 +187,10 @@ pub fn heikin_ashi_candles(candles: PyReadonlyArray2<f64>) -> PyArrTuple4 {
             ha_low[i] = c[[i,4]].min(ha_open[i]).min(ha_close[i]);
         }
         Ok((
-            PyArray1::from_vec(py, ha_open).to_owned(),
-            PyArray1::from_vec(py, ha_close).to_owned(),
-            PyArray1::from_vec(py, ha_high).to_owned(),
-            PyArray1::from_vec(py, ha_low).to_owned(),
+            PyArray1::from_vec(py, ha_open).unbind(),
+            PyArray1::from_vec(py, ha_close).unbind(),
+            PyArray1::from_vec(py, ha_high).unbind(),
+            PyArray1::from_vec(py, ha_low).unbind(),
         ))
     })
 }
@@ -198,7 +198,7 @@ pub fn heikin_ashi_candles(candles: PyReadonlyArray2<f64>) -> PyArrTuple4 {
 /// EMD — Empirical Mode Decomposition → (upperband, middleband, lowerband)
 #[pyfunction]
 pub fn emd(candles: PyReadonlyArray2<f64>, period: usize, delta: f64, fraction: f64) -> PyArrTuple3 {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let c = candles.as_array();
         let n = c.shape()[0];
         let price: Vec<f64> = (0..n).map(|i| (c[[i,3]] + c[[i,4]]) / 2.0).collect();
@@ -237,9 +237,9 @@ pub fn emd(candles: PyReadonlyArray2<f64>, period: usize, delta: f64, fraction: 
             sv.iter().map(|&x| x * fraction).collect()
         };
         Ok((
-            PyArray1::from_vec(py, avg_peak).to_owned(),
-            PyArray1::from_vec(py, mean).to_owned(),
-            PyArray1::from_vec(py, avg_valley).to_owned(),
+            PyArray1::from_vec(py, avg_peak).unbind(),
+            PyArray1::from_vec(py, mean).unbind(),
+            PyArray1::from_vec(py, avg_valley).unbind(),
         ))
     })
 }

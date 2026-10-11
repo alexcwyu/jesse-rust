@@ -49,7 +49,7 @@ pub fn trading_hours_mask<'py>(
     timestamps: PyReadonlyArray1<i64>,
     starts: PyReadonlyArray1<i64>,
     ends: PyReadonlyArray1<i64>,
-) -> PyResult<&'py PyArray1<bool>> {
+) -> PyResult<Bound<'py, PyArray1<bool>>> {
     let mut cursor = IntervalCursor::new(starts.as_slice()?, ends.as_slice()?)?;
     let result: Vec<bool> = timestamps
         .as_array()
@@ -69,7 +69,7 @@ pub fn filter_candles_by_intervals<'py>(
     timestamps: PyReadonlyArray1<i64>,
     starts: PyReadonlyArray1<i64>,
     ends: PyReadonlyArray1<i64>,
-) -> PyResult<&'py PyArray2<f64>> {
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
     let candles = candles.as_array();
     let timestamps = timestamps.as_array();
     if candles.nrows() != timestamps.len() {

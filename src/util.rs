@@ -9,7 +9,7 @@ use std::str::FromStr;
 /// Shift array by a given number of periods
 #[pyfunction]
 pub fn shift(source: PyReadonlyArray1<f64>, periods: isize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
@@ -37,20 +37,20 @@ pub fn shift(source: PyReadonlyArray1<f64>, periods: isize) -> PyResult<Py<PyArr
             }
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 
 /// Calculate moving standard deviation
 #[pyfunction]
 pub fn moving_std(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<PyArray1<f64>>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let source_array = source.as_array();
         let n = source_array.len();
         let mut result = Array1::<f64>::from_elem(n, f64::NAN);
 
         if n < period {
-            return Ok(PyArray1::from_array(py, &result).to_owned());
+            return Ok(PyArray1::from_array(py, &result).unbind());
         }
 
         // Calculate moving standard deviation
@@ -70,7 +70,7 @@ pub fn moving_std(source: PyReadonlyArray1<f64>, period: usize) -> PyResult<Py<P
             result[i] = variance.sqrt();
         }
 
-        Ok(PyArray1::from_array(py, &result).to_owned())
+        Ok(PyArray1::from_array(py, &result).unbind())
     })
 }
 

@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jesse-Rust — Development Guide</title><style>
+:root{color-scheme:light dark;--bg:#f6f8fa;--paper:#fff;--fg:#182332;--muted:#526274;--line:#d9e0e7;--accent:#1769aa}
+@media(prefers-color-scheme:dark){:root{--bg:#111820;--paper:#192330;--fg:#e6edf3;--muted:#a0b3c5;--line:#344354;--accent:#71b7ee}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,-apple-system,sans-serif}
+header{border-bottom:1px solid var(--line);padding:16px max(24px,calc((100vw - 1120px)/2));background:var(--paper);font-size:14px}
+main{max-width:1120px;margin:32px auto;padding:40px 48px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:24px}h1{font-size:2.1rem}h2{margin-top:2.5em;border-bottom:1px solid var(--line);padding-bottom:.35em}h3{margin-top:1.8em}
+a{color:var(--accent);text-underline-offset:3px}code{font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border-radius:4px;padding:2px 5px}pre{overflow:auto;border:1px solid var(--line);background:var(--bg);padding:16px;border-radius:7px}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;display:block;overflow-x:auto;font-size:14px}th,td{border:1px solid var(--line);padding:9px 12px;text-align:left}th{background:var(--bg)}blockquote{border-left:4px solid var(--accent);margin:16px 0;padding:4px 20px;color:var(--muted)}
+.diagram{overflow-x:auto;margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#182332}.mermaid{border:0;background:none;text-align:center}.mermaid svg{height:auto;max-width:100%}details{font-size:13px;color:#526274}.headerlink{margin-left:.4em;font-size:.7em;text-decoration:none;color:var(--muted)}
+main{min-width:0;overflow-wrap:anywhere}table,pre{max-width:100%}.diagram svg{display:block}
+th,td{min-width:120px;overflow-wrap:normal}
+@media(max-width:740px){main{margin:0;padding:24px 18px;border:0;border-radius:0}h1{font-size:1.7rem}.diagram{padding:8px}}
+@media print{header,details,.headerlink{display:none}body,main{background:#fff;color:#000;border:0;margin:0;padding:0}a{color:#000}.diagram,pre{break-inside:avoid}}
+</style></head><body><header>Engineering documentation · <a href="development.md">Markdown source</a></header><main><h1 id="jesse-rust-development-guide">Jesse-Rust — Development Guide<a class="headerlink" href="#jesse-rust-development-guide" title="Permanent link">&para;</a></h1>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Minimum version</th>
+<th>Install</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rust toolchain</td>
+<td>stable (1.75+)</td>
+<td><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh</code></td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.10+</td>
+<td>system or pyenv</td>
+</tr>
+<tr>
+<td>Maturin</td>
+<td>1.8+</td>
+<td><code>pip install maturin</code></td>
+</tr>
+<tr>
+<td>NumPy</td>
+<td>1.26.4+</td>
+<td><code>pip install numpy</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="project-structure">Project Structure<a class="headerlink" href="#project-structure" title="Permanent link">&para;</a></h2>
+<pre><code>ext-systems/jesse-rust/
+├── src/
+│   ├── lib.rs                  # PyO3 module root — registers all ~40 functions
+│   └── indicators.rs           # All indicator logic (~1 500 lines)
+├── docs/                       # This documentation
+│   ├── README.md
+│   ├── architecture.md
+│   ├── workflow.md
+│   ├── state-management.md
+│   └── development.md
+├── Cargo.toml                  # Rust manifest + release profiles
+├── pyproject.toml              # Python build metadata (Maturin backend)
+├── __init__.py                 # Python shim for symbol re-export
+├── MANIFEST.in                 # Source dist file inclusions
+├── LICENSE                     # MIT
+├── build-local.sh              # Dev install script
+├── build-quick.sh              # Quick host-target wheel
+├── build-all-wheels.sh         # Cross-compilation for all targets
+├── build-comprehensive.sh      # Extended cross-compilation
+└── build-local.ps1             # PowerShell equivalent of build-local.sh
+</code></pre>
+<p><strong>Source references</strong>:
+- <code>ext-systems/jesse-rust/src/lib.rs</code>
+- <code>ext-systems/jesse-rust/src/indicators.rs</code>
+- <code>ext-systems/jesse-rust/Cargo.toml</code>
+- <code>ext-systems/jesse-rust/pyproject.toml</code>
+- <code>ext-systems/jesse-rust/__init__.py</code></p>
+<hr />
+<h2 id="setup-development-install">Setup: Development Install<a class="headerlink" href="#setup-development-install" title="Permanent link">&para;</a></h2>
+<pre><code class="language-bash">cd ext-systems/jesse-rust
+
+# Option A — use the helper script (recommended for first-time setup)
+bash build-local.sh
+
+# Option B — manual steps
+pip install --upgrade maturin numpy
+maturin develop --release
+
+# Verify the build
+python3 -c &quot;
+import jesse_rust, numpy as np
+arr = np.array([100.0, 101.0, 102.0, 101.5, 103.0, 104.0, 102.5], dtype=np.float64)
+print('RSI:', jesse_rust.rsi(arr, 5))
+print('Functions:', [f for f in dir(jesse_rust) if not f.startswith('_')])
+&quot;
+</code></pre>
+<hr />
+<h2 id="build-wheel-for-distribution">Build Wheel for Distribution<a class="headerlink" href="#build-wheel-for-distribution" title="Permanent link">&para;</a></h2>
+<pre><code class="language-bash"># Host platform only (fast)
+maturin build --release
+
+# All supported targets (CI / release)
+bash build-all-wheels.sh
+
+# Publish to PyPI
+maturin publish --skip-existing dist/*
+</code></pre>
+<p>Wheels land in <code>dist/</code> following the naming convention:
+<code>jesse_rust-{version}-cp{python}-cp{python}-{platform}.whl</code></p>
+<hr />
+<h2 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h2>
+<h3 id="cargotoml-release-profiles"><code>Cargo.toml</code> — Release Profiles<a class="headerlink" href="#cargotoml-release-profiles" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <code>ext-systems/jesse-rust/Cargo.toml</code></p>
+<pre><code class="language-toml">[profile.release]
+opt-level = 3        # Maximum speed optimisation
+lto = true           # Link-time optimisation (whole-program)
+codegen-units = 1    # Single codegen unit for best inlining
+panic = &quot;abort&quot;      # Smaller binary, faster panics
+strip = &quot;symbols&quot;    # Remove debug symbols from binary
+
+[profile.release-small]
+inherits = &quot;release&quot;
+opt-level = &quot;z&quot;      # Optimise for binary size instead of speed
+</code></pre>
+<p>To use the size-focused profile:</p>
+<pre><code class="language-bash">maturin build --profile release-small
+</code></pre>
+<h3 id="pyprojecttoml-maturin-and-cibuildwheel"><code>pyproject.toml</code> — Maturin and cibuildwheel<a class="headerlink" href="#pyprojecttoml-maturin-and-cibuildwheel" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <code>ext-systems/jesse-rust/pyproject.toml</code></p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[tool.maturin] features</code></td>
+<td><code>["pyo3/extension-module"]</code></td>
+<td>Required for cdylib Python extensions</td>
+</tr>
+<tr>
+<td><code>module-name</code></td>
+<td><code>jesse_rust</code></td>
+<td>Name of the compiled <code>.so</code> / <code>.pyd</code></td>
+</tr>
+<tr>
+<td><code>python-source</code></td>
+<td><code>.</code></td>
+<td>Root of the Python package</td>
+</tr>
+<tr>
+<td><code>[tool.cibuildwheel] build</code></td>
+<td><code>cp310-* cp311-* cp312-* cp313-*</code></td>
+<td>Target CPython versions</td>
+</tr>
+<tr>
+<td><code>skip</code></td>
+<td><code>*-win32 *-manylinux_i686 *-musllinux_i686</code></td>
+<td>Excluded 32-bit targets</td>
+</tr>
+</tbody>
+</table>
+<h3 id="maturin-feature-flags">Maturin Feature Flags<a class="headerlink" href="#maturin-feature-flags" title="Permanent link">&para;</a></h3>
+<p><code>pyo3/extension-module</code> is mandatory when building a <code>cdylib</code> that will be loaded into an existing Python interpreter. Without it, PyO3 will link the Python library statically, causing symbol conflicts at runtime.</p>
+<hr />
+<h2 id="adding-a-new-indicator">Adding a New Indicator<a class="headerlink" href="#adding-a-new-indicator" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Implement the function in <code>ext-systems/jesse-rust/src/indicators.rs</code>:</li>
+</ol>
+<pre><code class="language-rust">/// Calculate MyIndicator
+#[pyfunction]
+pub fn my_indicator(source: PyReadonlyArray1&lt;f64&gt;, period: usize) -&gt; PyResult&lt;Py&lt;PyArray1&lt;f64&gt;&gt;&gt; {
+    Python::with_gil(|py| {
+        let arr = source.as_array();
+        let n = arr.len();
+        let mut result = Array1::&lt;f64&gt;::from_elem(n, f64::NAN);
+        // ... computation ...
+        Ok(PyArray1::from_array(py, &amp;result).to_owned())
+    })
+}
+</code></pre>
+<ol start="2">
+<li>Register it in <code>ext-systems/jesse-rust/src/lib.rs</code>:</li>
+</ol>
+<pre><code class="language-rust">m.add_function(wrap_pyfunction!(my_indicator, m)?)?;
+</code></pre>
+<ol start="3">
+<li>Rebuild:</li>
+</ol>
+<pre><code class="language-bash">maturin develop --release
+</code></pre>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="1-modulenotfounderror-no-module-named-jesse_rust">1. <code>ModuleNotFoundError: No module named 'jesse_rust'</code><a class="headerlink" href="#1-modulenotfounderror-no-module-named-jesse_rust" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: The Rust extension has not been compiled for the current Python environment.</p>
+<p><strong>Fix</strong>:</p>
+<pre><code class="language-bash">cd ext-systems/jesse-rust
+pip install maturin
+maturin develop --release
+</code></pre>
+<p>If the warning from <code>__init__.py</code> appears (<code>Warning: Rust native module 'jesse_rust' not compiled</code>), the Python shim loaded but found no <code>.so</code>/<code>.pyd</code> file.</p>
+<hr />
+<h3 id="2-importerror-dynamic-module-does-not-define-module-export-function">2. <code>ImportError: dynamic module does not define module export function</code><a class="headerlink" href="#2-importerror-dynamic-module-does-not-define-module-export-function" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: The wheel was built for a different Python version or architecture (ABI mismatch).</p>
+<p><strong>Fix</strong>: Rebuild for the exact Python interpreter in use:</p>
+<pre><code class="language-bash">maturin develop --release  # always targets the active interpreter
+</code></pre>
+<p>Or install the correct wheel from PyPI:</p>
+<pre><code class="language-bash">pip install --force-reinstall jesse-rust
+</code></pre>
+<hr />
+<h3 id="3-rust-compilation-fails-error-toolchain-stable-is-not-installed">3. Rust compilation fails: <code>error: toolchain 'stable-...' is not installed</code><a class="headerlink" href="#3-rust-compilation-fails-error-toolchain-stable-is-not-installed" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: Rust is installed but the active toolchain or cross-compilation target is missing.</p>
+<p><strong>Fix</strong>:</p>
+<pre><code class="language-bash">rustup update stable
+rustup target add x86_64-unknown-linux-gnu   # or the required target
+</code></pre>
+<hr />
+<h3 id="4-valueerror-indexerror-at-runtime-index-out-of-bounds">4. <code>ValueError</code> / <code>IndexError</code> at runtime — "index out of bounds"<a class="headerlink" href="#4-valueerror-indexerror-at-runtime-index-out-of-bounds" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: Input array is shorter than <code>period</code>. All indicator functions check <code>n &lt;= period</code> and return early with an all-NaN array. If a panic still occurs, it points to a missing bounds check.</p>
+<p><strong>Diagnosis</strong>:</p>
+<pre><code class="language-python">import jesse_rust, numpy as np
+arr = np.array([1.0, 2.0], dtype=np.float64)  # too short
+result = jesse_rust.rsi(arr, 14)  # should return all-NaN, not panic
+print(result)
+</code></pre>
+<p><strong>Fix</strong>: Report on <a href="https://github.com/jesse-ai/jesse-rust/issues">GitHub Issues</a> with the indicator name and input length.</p>
+<hr />
+<h3 id="5-incorrect-numerical-results-compared-to-a-reference-implementation">5. Incorrect numerical results compared to a reference implementation<a class="headerlink" href="#5-incorrect-numerical-results-compared-to-a-reference-implementation" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: Differences in warm-up seeding (how the first EMA / smoothed value is initialised). <code>jesse-rust</code> typically seeds EMA-based indicators at <code>source[0]</code> rather than using a simple-average warm-up.</p>
+<p><strong>Investigation</strong>:
+- Compare <code>ema(source, period)</code> at index <code>period - 1</code> against a pandas EWM result with <code>adjust=False</code>.
+- Check the <code>alpha</code> formula: <code>jesse-rust</code> uses <code>alpha = 2 / (period + 1)</code> for standard EMA.</p>
+<p><strong>Source</strong>: <code>ext-systems/jesse-rust/src/indicators.rs</code>, <code>ema()</code> function.</p>
+<hr />
+<h3 id="6-maturin-publish-fails-with-403-forbidden">6. <code>maturin publish</code> fails with <code>403 Forbidden</code><a class="headerlink" href="#6-maturin-publish-fails-with-403-forbidden" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: Missing or expired PyPI API token.</p>
+<p><strong>Fix</strong>:</p>
+<pre><code class="language-bash"># Set token via environment variable
+export MATURIN_PYPI_TOKEN=pypi-xxxxx
+maturin publish --skip-existing dist/*
+</code></pre>
+<hr />
+<h3 id="7-aarch64-cross-compilation-fails-on-linux">7. <code>aarch64</code> cross-compilation fails on Linux<a class="headerlink" href="#7-aarch64-cross-compilation-fails-on-linux" title="Permanent link">&para;</a></h3>
+<p><strong>Cause</strong>: <code>aarch64-linux-gnu-gcc</code> cross-linker is not installed.</p>
+<p><strong>Fix</strong> (Debian/Ubuntu):</p>
+<pre><code class="language-bash">sudo apt-get install gcc-aarch64-linux-gnu
+rustup target add aarch64-unknown-linux-gnu
+</code></pre>
+<p><strong>Source</strong>: <code>ext-systems/jesse-rust/build-all-wheels.sh</code>, cross-compiler check block.</p>
+<hr />
+<h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No network access</strong>: The library performs no network calls. All input data is passed in by the caller.</li>
+<li><strong>Memory safety</strong>: Rust's borrow checker eliminates use-after-free and buffer-overflow classes of bugs at compile time. The <code>PyReadonlyArray</code> wrappers enforce that input arrays are not mutated by Rust code.</li>
+<li><strong>Panic policy</strong>: <code>panic = "abort"</code> in release builds. An unexpected panic (e.g. from an ndarray bounds check) will terminate the process rather than propagate an undefined state. Input validation (length checks, NaN propagation) prevents panics on well-formed inputs.</li>
+<li><strong>Integer overflow</strong>: All loop counters are <code>usize</code>. Arithmetic on <code>period as f64</code> is used to avoid integer-truncation errors in smoothing formulas.</li>
+<li><strong>Dependency audit</strong>: Run <code>cargo audit</code> periodically to check for known CVEs in crate dependencies.</li>
+</ul>
+<pre><code class="language-bash">cargo install cargo-audit
+cargo audit
+</code></pre>
+<hr />
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="README.md">README.md</a> — Overview and quick start</li>
+<li><a href="architecture.md">architecture.md</a> — Component breakdown and dependency table</li>
+<li><a href="workflow.md">workflow.md</a> — Build pipeline and data-flow diagrams</li>
+<li><a href="state-management.md">state-management.md</a> — Internal rolling-state patterns</li>
+</ul>
+<h2 id="maintained-uv-environment-2026-10-12">Maintained uv environment (2026-10-12)<a class="headerlink" href="#maintained-uv-environment-2026-10-12" title="Permanent link">&para;</a></h2>
+<p>The tested interpreter selection is Python 3.15.0. uv 0.13.0 resolves runtime dependencies, optional extras, development groups, and build isolation. <code>uv.lock</code> records exact versions; <code>--upgrade</code> refreshes them within the project and compatibility constraints. Review <a href="validation.md">validation evidence</a> before treating a build or test command as successful on this host.</p>
+<p>Python 3.15.0 builds the native extension after migrating to current PyO3 and NumPy ownership APIs. The coordinator crate and the Python extension are distinct native artifacts. Numerical integration tests reside in the sibling Jesse repository.</p>
+<h3 id="layout-and-build-ownership">Layout and build ownership<a class="headerlink" href="#layout-and-build-ownership" title="Permanent link">&para;</a></h3>
+<p>The native src/ modules and coordination/ crate remain in place. maturin uses the root Cargo manifest and locked native dependencies. The interpreter and Python development dependencies are recorded in .python-version and uv.lock.</p>
+<p>The native toolchain used for these checks is Rust 1.99.0 with Apple Command Line Tools. Make Cargo available with <code>export PATH=/opt/homebrew/opt/rustup/bin:$PATH</code>.</p>
+<h3 id="commands-from-the-repository-root">Commands from the repository root<a class="headerlink" href="#commands-from-the-repository-root" title="Permanent link">&para;</a></h3>
+<pre><code class="language-sh">uv python install 3.15.0
+uv lock --upgrade --python 3.15.0
+uv sync --all-groups --all-extras --python 3.15.0
+uv build
+cargo test --locked
+cargo test --manifest-path coordination/Cargo.toml --locked
+uv run --no-sync python -c &quot;import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))&quot;
+</code></pre>
+<h3 id="external-inputs-and-test-scope">External inputs and test scope<a class="headerlink" href="#external-inputs-and-test-scope" title="Permanent link">&para;</a></h3>
+<p>The Python extension requires Rust, maturin, PyO3, and matching NumPy Rust bindings. Jesse integration tests live in the sibling Jesse repository and exercise the exported functions through their real callers. This repository also contains the coordinator crate and its own tests. The maintenance changes binding ownership APIs without changing indicator algorithms.</p>
+<p>Existing upstream skips and xfails remain unchanged. Full suite failures, incomplete runs, and supplemental scoped checks are listed separately in validation. No new test cases were added. The architecture document links existing implementation files and explains the component contracts.</p></main>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.esm.min.mjs';
+mermaid.initialize({startOnLoad:true,securityLevel:'strict',theme:'default',flowchart:{useMaxWidth:true},sequence:{useMaxWidth:true}});
+</script></body></html>
