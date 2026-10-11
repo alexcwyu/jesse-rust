@@ -12,15 +12,15 @@ Current recorded status: **complete**. Interpreter fallback evidence and native 
 
 | Step | Exact command | Exit | Elapsed seconds | Evidence |
 |---|---|---:|---:|---|
-| python-sync | `uv sync --all-groups --all-extras --python 3.15` | 1 | 8.43 | [jesse-rust-python-sync.log](../../docs/maintenance-2026-10-12/jesse-rust-python-sync.log) |
-| cargo-update | `cargo update` | 0 | 6.03 | [jesse-rust-cargo-update.log](../../docs/maintenance-2026-10-12/jesse-rust-cargo-update.log) |
-| python315-modern-sync | `uv sync --all-groups --all-extras --python 3.15` | 1 | 44.2 | [jesse-rust-python315-modern-sync.log](../../docs/maintenance-2026-10-12/jesse-rust-python315-modern-sync.log) |
-| python315-fixed-sync | `uv sync --all-groups --all-extras --python 3.15` | 0 | 64.92 | [jesse-rust-python315-fixed-sync.log](../../docs/maintenance-2026-10-12/jesse-rust-python315-fixed-sync.log) |
-| cargo-coordinator-tests | `cargo test --manifest-path coordination/Cargo.toml` | 0 | 13.04 | [jesse-rust-cargo-coordinator-tests.log](../../docs/maintenance-2026-10-12/jesse-rust-cargo-coordinator-tests.log) |
-| build | `uv build` | 0 | 47.24 | [jesse-rust-build.log](../../docs/maintenance-2026-10-12/jesse-rust-build.log) |
-| native-import | `uv run --no-sync python -c 'import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))'` | 0 | 0.35 | [jesse-rust-native-import.log](../../docs/maintenance-2026-10-12/jesse-rust-native-import.log) |
-| cargo-tests | `cargo test` | 0 | 19.78 | [jesse-rust-cargo-tests.log](../../docs/maintenance-2026-10-12/jesse-rust-cargo-tests.log) |
-| build-current-metadata | `uv build` | 0 | 34.67 | [jesse-rust-build-current-metadata.log](../../docs/maintenance-2026-10-12/jesse-rust-build-current-metadata.log) |
+| python-sync | `uv sync --all-groups --all-extras --python 3.15` | 1 | 8.43 | [check record](maintenance/index.html) |
+| cargo-update | `cargo update` | 0 | 6.03 | [check record](maintenance/index.html) |
+| python315-modern-sync | `uv sync --all-groups --all-extras --python 3.15` | 1 | 44.2 | [check record](maintenance/index.html) |
+| python315-fixed-sync | `uv sync --all-groups --all-extras --python 3.15` | 0 | 64.92 | [check record](maintenance/index.html) |
+| cargo-coordinator-tests | `cargo test --manifest-path coordination/Cargo.toml` | 0 | 13.04 | [check record](maintenance/index.html) |
+| build | `uv build` | 0 | 47.24 | [check record](maintenance/index.html) |
+| native-import | `uv run --no-sync python -c 'import jesse_rust; import numpy as np; print(jesse_rust.ema(np.array([1., 2., 3., 4.]), 2)); print(callable(jesse_rust.run_coordinator))'` | 0 | 0.35 | [check record](maintenance/index.html) |
+| cargo-tests | `cargo test` | 0 | 19.78 | [check record](maintenance/index.html) |
+| build-current-metadata | `uv build` | 0 | 34.67 | [check record](maintenance/index.html) |
 
 ## Test summaries and failures
 
