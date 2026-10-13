@@ -1,5 +1,11 @@
 # Jesse-Rust — Development Guide
 
+<!-- current-documentation-provenance -->
+Documentation reviewed: 2026-10-13 · Git source base: `edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4` · [Current architecture and feature guide](ayu-develop.md).
+Historical execution commands/results below retain their original dates and scope; this metadata update is not a new application test run.
+<!-- /current-documentation-provenance -->
+
+
 ## Prerequisites
 
 | Tool | Minimum version | Install |

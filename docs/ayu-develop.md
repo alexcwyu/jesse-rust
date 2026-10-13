@@ -1,143 +1,207 @@
-# Jesse Rust: workflow and architecture
+# Jesse Rust: workflow, design and architecture
 
-Updated 2026-10-12. Source baseline: `eb3e839e5956631e9e93a0284c41816db1b5e67a` on `feature/ayu_develop`. See [development commands](development.md) and [validation evidence](validation.md) for the tested environment and current limitations.
+Updated: **2026-10-13**
+Reviewed Git hash: `edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4`
+Branch: `feature/ayu_develop`
+Source diff SHA256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+Scope: **Native host extension** / Maintenance: **companion**
+Languages: Rust, Python
 
-## Purpose and features
+[HTML edition](ayu-develop.html) / [Development](development.md) / [Historical validation](validation.md) / [Full system comparison](../../docs/index.html)
 
-Supplies native technical indicators, candle transforms, trading-session filtering, and the shared-state coordinator used by the Jesse Python trading framework.
+## Purpose and scope
 
-- Moving averages and oscillators
-- Bands, trend, volume, and statistical functions
-- Candle aggregation and gap correction
-- Trading-hours masks and interval filtering
-- Native shared-state coordinator
+PyO3 numerical indicator extension and local in-memory coordination service for the Jesse Python host.
 
-## Component architecture
+## Features and support boundaries
 
-Indicator categories keep numerical kernels organized while the module entry point registers the Python functions. PyReadonlyArray exposes borrowed input views and returned PyArray objects own the numerical results. IntervalCursor accelerates neighboring session queries while retaining behavior for unordered and strided timestamps. Candle operations document accumulation and NaN semantics, so a bindings upgrade must preserve those numerical contracts. The coordinator is a separate native service invoked from the Python module with the interpreter detached.
+Native = implemented here. Integration = supplied through a named host/API. Limited = material restriction. Not provided = evidenced scope exclusion. Unverified = support/absence not established. Not applicable = outside this artifact type.
+
+| Capability | Status | Implementation and limits | Source |
+|---|---|---|---|
+| Backtesting | Not provided | This extension exports numerical kernels and a local coordinator; trading strategy/backtest/broker runtime belongs to the Jesse host. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) |
+| Live execution | Not provided | This extension exports numerical kernels and a local coordinator; trading strategy/backtest/broker runtime belongs to the Jesse host. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) |
+| Paper trading | Not provided | This extension exports numerical kernels and a local coordinator; trading strategy/backtest/broker runtime belongs to the Jesse host. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) |
+| Event driven | Limited | Coordinator provides bounded local pub/sub and shared-state RPC; no strategy engine event dispatcher is exposed here. | [Server](../coordination/src/lib.rs) ([L160](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L160)) / [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) |
+| Vectorized | Limited | Consumes/returns NumPy series; kernels loop sequentially in Rust. This is array computation, not a vectorized portfolio backtester. | [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) |
+| Order management | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Order types | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Multi venue | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Crypto | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Equities | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Futures | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Options | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Forex | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Strategy api | Not provided | This extension exports numerical kernels and a local coordinator; trading strategy/backtest/broker runtime belongs to the Jesse host. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) |
+| Optimization | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Machine learning | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Reinforcement learning | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Portfolio | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Risk management | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Performance analytics | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Historical data | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Streaming data | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Persistence | Not provided | Coordinator intentionally keeps State in memory and changes generation across restarts; this is not durable persistence. | [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113)) / [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) |
+| Data pipeline | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Web ui | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Cli | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Monitoring | Unverified | Not established by the inspected implementation boundaries; no absence or production claim is made. | Not applicable to this repository scope. |
+| Extension api | Native | PyO3 module exposes actual Rust indicator kernels to Python. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) / [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19)) |
+| Native acceleration | Native | PyO3 module exposes actual Rust indicator kernels to Python. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) / [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19)) |
+| Distributed execution | Limited | Local-only authenticated coordination for host processes; loopback bind restriction prevents distributed network deployment. | [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) |
+
+## System components
+
+| Component | Responsibility | Source |
+|---|---|---|
+| Python bindings | Exports module functions and converts error/return types. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [run_coordinator](../src/lib.rs) ([L13](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L13)) |
+| Moving averages | Computes rolling and recursive averages over NumPy input. | [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) |
+| Oscillators | Computes RSI and related oscillator arrays. | [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19)) |
+| Local coordinator | Hosts authenticated bounded state and pub/sub for the host. | [Server](../coordination/src/lib.rs) ([L160](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L160)) / [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) |
+| Ephemeral state | Stores keys, locks and subscriber state until expiry/restart. | [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113)) |
+
+## Architecture and component boundaries
+
+The component view summarizes inspected responsibility boundaries. Arrows identify the documented API/data dependencies; this is not a deployment-readiness claim.
 
 ```mermaid
 flowchart LR
-    C0["Jesse Python caller"]
-    C1["PyO3 and NumPy boundary"]
-    C2["Indicator category modules"]
-    C3["Candle and interval utilities"]
-    C4["Coordinator shared-state service"]
-    C0 --> C1 --> C2 --> C3 --> C4
+  N0["Python bindings"]
+  N1["Moving averages"]
+  N2["Oscillators"]
+  N3["Local coordinator"]
+  N4["Ephemeral state"]
+  N0 -->|"Registers and invokes PyO3 numerical entry points."| N1
+  N0 -->|"Registers oscillator entry points."| N2
+  N0 -->|"run_coordinator delegates with Python detached."| N3
+  N3 -->|"Owns shared state under a mutex."| N4
 ```
 
-The diagram shows responsibility boundaries in the main research or execution path. Concrete entry points and implementation files are linked below.
+- Registers and invokes PyO3 numerical entry points.: [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
+- Registers oscillator entry points.: [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19))
+- run_coordinator delegates with Python detached.: [run_coordinator](../src/lib.rs) ([L13](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L13)) / [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779))
+- Owns shared state under a mutex.: [Server](../coordination/src/lib.rs) ([L160](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L160)) / [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113))
 
-## Core types
+## Design decisions
 
-The types below belong to the public or native boundary described by the linked implementation. Arrows describe the dependency or ownership relationship used in the documented workflow. Listed Python methods are present in the linked source; native array types represent the binding boundary.
+| Decision | Rationale | Tradeoff | Evidence |
+|---|---|---|---|
+| Keep numerical kernels behind PyO3 NumPy bindings. | Python host retains orchestration while Rust computes array results. | Caller must respect each indicator warmup/empty-input contract. | [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19)) |
+| Use bounded local ephemeral coordination. | Token auth, loopback-only binding and restart generations bound access and prevent silent stale-state continuation. | State is lost on restart; this is not a durable or remote distributed service. | [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) / [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113)) |
+
+## Class and interface relationships
 
 ```mermaid
 classDiagram
-    class PyReadonlyArray
-    class PyArray
-    class IntervalCursor
-    PyReadonlyArray --> IntervalCursor : queries borrowed timestamps
-    IntervalCursor --> PyArray : produces membership outputs
+  class N0["jesse_rust"] {
+    <<function>>
+  }
+  class N1["sma"] {
+    <<function>>
+  }
+  class N2["ema"] {
+    <<function>>
+  }
+  class N3["rsi"] {
+    <<function>>
+  }
+  class N4["Server"] {
+    <<struct>>
+    +authenticate()
+    +execute()
+    +subscribe()
+  }
+  class N5["State"] {
+    <<struct>>
+    +remove()
+    +purge()
+  }
+  N4 *-- N5 : Mutex owns ephemeral shared State.
+  N0 ..> N1 : Registers sma as a Python-callable function.
+  N0 ..> N2 : Registers ema as a Python-callable function.
+  N0 ..> N3 : Registers rsi as a Python-callable function.
 ```
 
-## End-to-end workflow
+Each node is a reviewed source symbol. Function/module nodes are explicitly labeled; they do not imply Python classes. Only reviewed relationships are drawn.
 
-1. Pass typed NumPy arrays and indicator parameters.
-2. Validate and borrow input array views.
-3. Run native indicator or candle calculations.
-4. Allocate the result with current NumPy bindings.
-5. Return arrays to Jesse or run the coordinator service.
+- **jesse_rust** (function): [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33))
+- **sma** (function): [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
+- **ema** (function): [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350))
+- **rsi** (function): [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19))
+- **Server** (struct): [Server](../coordination/src/lib.rs) ([L160](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L160))
+- **State** (struct): [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113))
+
+## Workflow
+
+### Host indicator invocation
+
+The Jesse host is an external participant; its trading workflow is not implemented or independently audited in this repository. The numerical call/return is read directly here.
 
 ```mermaid
 flowchart TD
-    W0["Pass typed NumPy arrays and indicator parameters"]
-    W1["Validate and borrow input array views"]
-    W2["Run native indicator or candle calculations"]
-    W3["Allocate the result with current NumPy bindings"]
-    W4["Return arrays to Jesse or run the coordinator service"]
-    W0 --> W1 --> W2 --> W3 --> W4
-    W4 --> R{"Review evidence"}
-    R -->|Revise configuration| W0
-    R -->|Retain result| A["Store reproducible artifacts"]
+  W0["Jesse host calls registered jesse_rust.sma with NumPy input."]
+  W1["sma obtains the readonly array view and computes rolling output."]
+  W0 --> W1
+  W2["Return the calculated NumPy array to the Python caller."]
+  W1 --> W2
 ```
 
-## Interaction sequence
+1. Jesse host calls registered jesse_rust.sma with NumPy input.. [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) / [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33))
+2. sma obtains the readonly array view and computes rolling output.. [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
+3. Return the calculated NumPy array to the Python caller.. [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
 
-The sequence follows one unit of work. Results return across the same boundaries that accepted the configuration and data. External I/O and numerical execution have different failure modes and should retain separate evidence.
+## Sequence
+
+Host indicator invocation
+
+The Jesse host is an external participant; its trading workflow is not implemented or independently audited in this repository. The numerical call/return is read directly here.
 
 ```mermaid
 sequenceDiagram
-    actor User as Researcher or operator
-    participant C0 as Jesse Python caller
-    participant C1 as PyO3 and NumPy boundary
-    participant C2 as Indicator category modules
-    participant C3 as Candle and interval utilities
-    participant C4 as Coordinator shared-state service
-    User->>C0: Supply configuration and inputs
-    C0->>C1: Validate and borrow input array views
-    C1->>C2: Run native indicator or candle calculations
-    C2->>C3: Allocate the result with current NumPy bindings
-    C3->>C4: Return arrays to Jesse or run the coordinator service
-    C4-->>C3: Results and retained state
-    C3-->>C2: Execution or evaluation evidence
-    C2-->>C1: Computed outputs
-    C1-->>C0: Research or runtime result
-    C0-->>User: Inspect outputs and provenance
+  participant N0 as Moving averages
+  participant N1 as Python bindings
+  N1->>N0: Call registered sma with a readonly NumPy view.
+  N0->>N1: Return PyArray1 output.
 ```
 
-## Data and artifact lifecycle
+- Call registered sma with a readonly NumPy view.: [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) / [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
+- Return PyArray1 output.: [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108))
 
-```mermaid
-flowchart LR
-    Inputs["Configuration and source data"] --> Runtime["Validated runtime inputs"]
-    Runtime --> Work["Indicator category modules"]
-    Work --> Outputs["Coordinator shared-state service"]
-    Outputs --> Review["Metrics, logs, and retained artifacts"]
-    Review --> Inputs
-```
+## Strengths and limits
 
-Inputs include explicit strategy or model settings, data selection, and execution assumptions. Retaining these with outputs makes a rerun reviewable. Temporary environments and caches remain development artifacts, while source-controlled configuration documents intended behavior.
+### Strengths
 
-## Execution and failure boundaries
+- Actual rolling/recursive indicator bodies are exposed through a small Python-native boundary. [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) / [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) / [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19))
 
-The Python extension requires Rust, maturin, PyO3, and matching NumPy Rust bindings. Jesse integration tests live in the sibling Jesse repository and exercise the exported functions through their real callers. This repository also contains the coordinator crate and its own tests. The maintenance changes binding ownership APIs without changing indicator algorithms.
+### Limitations
 
-```mermaid
-stateDiagram-v2
-    [*] --> Configured
-    Configured --> Prepared: Inputs and dependencies available
-    Prepared --> Running: Start unit of work
-    Running --> Completed: Retain result
-    Running --> Failed: Record exception and inputs
-    Failed --> Configured: Correct configuration or implementation
-    Completed --> [*]
-```
+- Market coverage, broker execution, optimizer and trading risk policy are host responsibilities; they cannot be credited as native engine capabilities here. [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) / [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33))
 
-This state diagram describes the documented workflow, not a claim that these names are an implementation enum. Failure evidence should identify whether input preparation, external services, native compilation, or application execution failed.
+## Validation scope
 
-## Development layout
+The linked validation and command records preserve actual historical runs and user-authorized exclusions. This source/document review does not rerun application tests, establish live trading readiness or rank benchmark performance. Current data, credential and runtime prerequisites remain material.
 
-The native src/ modules and coordination/ crate remain in place. maturin uses the root Cargo manifest and locked native dependencies. The interpreter and Python development dependencies are recorded in .python-version and uv.lock.
+[Repository validation](validation.md) / [Executed checks](maintenance/index.md)
 
 ## Source map
 
-| Existing source | Responsibility evidence |
-|---|---|
-| [src/lib.rs](../src/lib.rs#L1) | Implementation and module/type documentation, beginning at line 1 |
-| [src/moving_averages.rs](../src/moving_averages.rs#L12) | Implementation and module/type documentation, beginning at line 12 |
-| [src/oscillators.rs](../src/oscillators.rs#L19) | Implementation and module/type documentation, beginning at line 19 |
-| [src/bands.rs](../src/bands.rs#L14) | Implementation and module/type documentation, beginning at line 14 |
-| [src/trend.rs](../src/trend.rs#L12) | Implementation and module/type documentation, beginning at line 12 |
-| [src/volume.rs](../src/volume.rs#L11) | Implementation and module/type documentation, beginning at line 11 |
-| [src/statistical.rs](../src/statistical.rs#L12) | Implementation and module/type documentation, beginning at line 12 |
-| [src/ehlers.rs](../src/ehlers.rs#L11) | Implementation and module/type documentation, beginning at line 11 |
-| [src/candle.rs](../src/candle.rs#L95) | Implementation and module/type documentation, beginning at line 95 |
-| [src/trading_hours.rs](../src/trading_hours.rs#L47) | Implementation and module/type documentation, beginning at line 47 |
-| [src/helpers.rs](../src/helpers.rs#L1) | Implementation and module/type documentation, beginning at line 1 |
-| [src/types.rs](../src/types.rs#L1) | Implementation and module/type documentation, beginning at line 1 |
-| [coordination/src/lib.rs](../coordination/src/lib.rs#L779) | Implementation and module/type documentation, beginning at line 779 |
-| [Cargo.toml](../Cargo.toml#L1) | Implementation and module/type documentation, beginning at line 1 |
-| [pyproject.toml](../pyproject.toml#L5) | Implementation and module/type documentation, beginning at line 5 |
+| Reviewed symbol/path | Inspected responsibility | Actual file SHA256 |
+|---|---|---|
+| [jesse_rust](../src/lib.rs) ([L33](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L33)) | Registers indicator functions and run_coordinator into the Python module; no broker or strategy event loop is registered. | `a17ff60af3bcfa127b265bcb4a6c709173039ee063c17504e68cf6cbf8d0c04a` |
+| [sma](../src/moving_averages.rs) ([L108](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L108)) | Reads a NumPy view, initializes NaN output, performs rolling sum/count updates and returns a NumPy array. | `476d9ee9f185c24a8582c9c7fc985c64d80e33ce94e6f31d90288e81de1d1c9f` |
+| [ema](../src/moving_averages.rs) ([L350](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/moving_averages.rs#L350)) | Uses the input first value and explicit alpha recurrence to compute an output series; empty and insufficient input return initialized arrays. | `476d9ee9f185c24a8582c9c7fc985c64d80e33ce94e6f31d90288e81de1d1c9f` |
+| [rsi](../src/oscillators.rs) ([L19](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/oscillators.rs#L19)) | Builds initial gains/losses and Wilder smoothing with NaN warmup and zero-loss handling. | `9016a8f4d1cc3885c5ddb548ac2a14cd7de2397d3b158159179d800f66871b47` |
+| [run_coordinator](../src/lib.rs) ([L13](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/src/lib.rs#L13)) | Detaches the Python thread while calling jesse_coordinator::run and translates failures to PyRuntimeError. | `a17ff60af3bcfa127b265bcb4a6c709173039ee063c17504e68cf6cbf8d0c04a` |
+| [Server](../coordination/src/lib.rs) ([L160](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L160)) | Owns Mutex-protected State, token, restart generation and bounded client/event accounting; authenticate/execute/subscribe implement the local protocol. | `1d313546669a850fe400130c04445f084d3c7b34f96e83c35c0c17f927b5ee53` |
+| [run](../coordination/src/lib.rs) ([L779](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L779)) | Requires token length >=32, refuses non-loopback bind addresses, supervises parent stdin EOF and creates a new generation on restart. | `1d313546669a850fe400130c04445f084d3c7b34f96e83c35c0c17f927b5ee53` |
+| [State](../coordination/src/lib.rs) ([L113](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/coordination/src/lib.rs#L113)) | Holds entries, byte accounting and subscribers in memory; purge removes expired entries and dead subscribers. | `1d313546669a850fe400130c04445f084d3c7b34f96e83c35c0c17f927b5ee53` |
+| [AGENTS.md](../AGENTS.md) ([L6](https://github.com/alexcwyu/jesse-rust/blob/edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4/AGENTS.md#L6)) | Repository instructions identify performance implementations consumed by Jesse through PyO3. | `f32ebe94da2bcbe0a87df5c281560b79f5a46be39426a10bc4fc4447a93c6378` |
 
-The links target files present in this checkout. Follow their imports and adjacent tests when changing a boundary. The validation document distinguishes successful builds, complete test runs, inherited skips, and unresolved prerequisites.
+## Documentation provenance
+
+Review date: 2026-10-13. Full committed source HEAD: `edb3e71b7ef31ecad3a661e2aaa5e46ccd94a2b4`. Template version: 2. 5 source files were independently hashed for this guide.
+
+[Evidence catalog](../../docs/systems-2026-10-13/catalog.json) / [Standard template](../../docs/guidelines/APP_TEMPLATE.md)
+
+- Inspected source paths: src/lib.rs, src/moving_averages.rs, src/oscillators.rs, coordination/src/lib.rs, AGENTS.md
+- Read-only audit against the full HEAD and tracked-diff provenance in inventory.json. Validation documentation is historical executed evidence; exclusions are completion policy, not live venue proof. No dependencies, tests or upstream files were changed.
